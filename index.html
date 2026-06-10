@@ -362,9 +362,11 @@
       .btn{width:100%}
       .hero-h{font-size:34px;line-height:38px}
       .hide-sm{display:none}
-      /* Larger username input on mobile — 16px prevents iOS auto-zoom */
-      input.txt{height:52px;font-size:16px;padding:0 16px}
-      .field-label{font-size:13px}
+      /* Larger username input on mobile — 16px+ prevents iOS auto-zoom */
+      input.txt{height:62px;font-size:18px;padding:0 18px;width:100%;box-sizing:border-box}
+      .btn{height:58px;font-size:13px}
+      .search-card{padding:22px 20px}
+      .field-label{font-size:13px;margin-bottom:10px}
       /* Sticky verdict bar on mobile */
       .trade-verdict{position:sticky;top:58px;z-index:15;margin-left:-16px;margin-right:-16px;border-radius:0;border-left:none;border-right:none}
     }
@@ -387,7 +389,7 @@
   <div class="search-card">
     <label class="field-label" for="lg-input">Sleeper Username</label>
     <div class="row">
-      <input type="text" id="lg-input" class="txt" placeholder="e.g. sleeperuser" autocomplete="off" spellcheck="false"/>
+      <input type="text" id="lg-input" class="txt" placeholder="e.g. sleeperuser" autocomplete="off" spellcheck="false" style="min-width:0;width:100%;box-sizing:border-box"/>
       <button class="btn" id="load-btn" onclick="findUserLeagues()">Find Leagues</button>
     </div>
     <p class="hint">Enter your Sleeper username — we'll show all your leagues to pick from.</p>
