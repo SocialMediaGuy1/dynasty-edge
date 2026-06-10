@@ -69,6 +69,18 @@
     .hint{margin-top:9px;font-size:12px;color:var(--tt)}
     .hint a{color:var(--brand);text-decoration:none}
 
+    /* ─── League picker ─── */
+    .league-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+    .league-card{display:flex;align-items:center;gap:14px;background:var(--g7);border:1px solid var(--border);border-radius:var(--r-md);padding:13px 16px;cursor:pointer;transition:border-color .15s,background .15s}
+    .league-card:hover{border-color:rgba(0,255,249,.3);background:rgba(0,255,249,.04)}
+    .league-card-av{width:38px;height:38px;border-radius:var(--r-sm);overflow:hidden;border:1px solid var(--border);flex-shrink:0}
+    .league-card-av img{width:100%;height:100%;object-fit:cover;display:block}
+    .league-card-av-ph{width:100%;height:100%;background:var(--g6);display:flex;align-items:center;justify-content:center;font-family:var(--fd);font-size:13px;font-weight:800;color:var(--ts)}
+    .league-card-info{flex:1;min-width:0}
+    .league-card-name{font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .league-card-meta{font-size:11px;color:var(--tt);margin-top:2px}
+    .league-card-badges{display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap}
+
     /* ─── Error / Loading ─── */
     .err-box{
       background:rgba(255,100,130,.1);border:1px solid rgba(255,100,130,.25);
@@ -356,12 +368,16 @@
   </div>
 
   <div class="search-card">
-    <label class="field-label" for="lg-input">League ID</label>
+    <label class="field-label" for="lg-input">Sleeper Username</label>
     <div class="row">
-      <input type="text" id="lg-input" class="txt" placeholder="e.g. 1048270803320283136" autocomplete="off" spellcheck="false"/>
-      <button class="btn" id="load-btn" onclick="loadLeague()">Load</button>
+      <input type="text" id="lg-input" class="txt" placeholder="e.g. sleeperuser" autocomplete="off" spellcheck="false"/>
+      <button class="btn" id="load-btn" onclick="findUserLeagues()">Find Leagues</button>
     </div>
-    <p class="hint">Find your ID in Sleeper → League → Settings, or in the URL at <a href="https://sleeper.app" target="_blank">sleeper.app</a></p>
+    <p class="hint">Enter your Sleeper username — we'll show all your leagues to pick from.</p>
+    <div id="league-picker" style="display:none;margin-top:18px;padding-top:18px;border-top:1px solid var(--border)">
+      <label class="field-label">Your Leagues</label>
+      <div id="league-list" class="league-list"></div>
+    </div>
   </div>
 
   <div class="err-box" id="err-box"></div>
@@ -475,6 +491,8 @@ const S = {
   isSF: false,
   _allPlayers: null,
   valueSource: null,
+  myUserId: null,
+  myRosterIdx: null,
 };
 
 // ── KTC-style dynasty values [name, SF, 1QB] ──────────
@@ -640,9 +658,90 @@ function switchDynasty() {
 }
 
 // ── Load league ───────────────────────────────────────
-async function loadLeague() {
-  const lid = document.getElementById('lg-input').value.trim();
-  if (!lid) { showErr('Please enter a league ID.'); return; }
+// ── Username → league picker ──────────────────────────
+async function findUserLeagues() {
+  const username = document.getElementById('lg-input').value.trim();
+  if (!username) { showErr('Enter your Sleeper username.'); return; }
+  hideErr();
+
+  const btn = document.getElementById('load-btn');
+  btn.disabled = true;
+  btn.textContent = 'Searching…';
+
+  try {
+    const user = await apiFetch(`${API}/user/${username}`);
+    if (!user?.user_id) { showErr('Username not found. Check the spelling and try again.'); return; }
+
+    S.myUserId = user.user_id;
+
+    const nflState = await apiFetch(`${API}/state/nfl`);
+    const season = nflState?.season || new Date().getFullYear();
+
+    const leagues = await apiFetch(`${API}/user/${user.user_id}/leagues/nfl/${season}`);
+    if (!leagues?.length) { showErr(`No NFL leagues found for "${username}" in ${season}.`); return; }
+
+    renderLeaguePicker(leagues);
+  } catch(e) {
+    showErr(`Couldn't find leagues. (${e.message})`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Find Leagues';
+  }
+}
+
+function renderLeaguePicker(leagues) {
+  const picker = document.getElementById('league-picker');
+  const list   = document.getElementById('league-list');
+  picker.style.display = 'block';
+  list.innerHTML = '';
+
+  // Sort: in-season first, then by name
+  const sorted = [...leagues].sort((a, b) => {
+    const order = { in_season: 0, drafting: 1, pre_draft: 2, complete: 3 };
+    const oa = order[a.status] ?? 9, ob = order[b.status] ?? 9;
+    if (oa !== ob) return oa - ob;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+
+  sorted.forEach(lg => {
+    const card = document.createElement('div');
+    card.className = 'league-card';
+    card.onclick = () => loadLeague(lg.league_id);
+
+    // Avatar
+    const av = document.createElement('div');
+    av.className = 'league-card-av';
+    if (lg.avatar) {
+      av.innerHTML = `<img src="${CDN}/${lg.avatar}" onerror="this.parentNode.innerHTML='<div class=league-card-av-ph>${esc((lg.name||'?')[0].toUpperCase())}</div>'"/>`;
+    } else {
+      av.innerHTML = `<div class="league-card-av-ph">${esc((lg.name||'?')[0].toUpperCase())}</div>`;
+    }
+
+    // Info
+    const info = document.createElement('div');
+    info.className = 'league-card-info';
+    const positions = lg.roster_positions || [];
+    const isSF = positions.includes('SUPER_FLEX');
+    const formatLabel = isSF ? 'SF' : `${positions.filter(p=>p==='QB').length}QB`;
+    info.innerHTML = `
+      <div class="league-card-name">${esc(lg.name || 'Unnamed League')}</div>
+      <div class="league-card-meta">${lg.total_rosters} teams · ${(lg.sport||'NFL').toUpperCase()} · ${formatLabel}</div>`;
+
+    // Badges
+    const badges = document.createElement('div');
+    badges.className = 'league-card-badges';
+    const statusMap = { pre_draft:'Pre-Draft', drafting:'Drafting', in_season:'In Season', complete:'Complete' };
+    badges.innerHTML = `<span class="badge badge-muted">${statusMap[lg.status]||lg.status}</span>`;
+
+    card.appendChild(av);
+    card.appendChild(info);
+    card.appendChild(badges);
+    list.appendChild(card);
+  });
+}
+
+async function loadLeague(lid) {
+  if (!lid) { showErr('Please select a league.'); return; }
   hideErr();
   document.getElementById('league-loading').style.display = 'block';
   document.getElementById('league-content').style.display = 'none';
@@ -665,6 +764,8 @@ async function loadLeague() {
     rosters.forEach(r => { r._user = userMap[r.owner_id]||null; S.rosterMap[r.roster_id] = r; });
     S.league = league;
     S.nflState = nflState;
+    // Carry over myUserId from the username lookup (set before loadLeague was called)
+    // S.myUserId is already set by findUserLeagues — don't overwrite it here
 
     // Find best matchup week
     const { week, matchups } = await findBestWeek(lid, league, nflState);
@@ -1024,7 +1125,9 @@ async function loadDynastyValues() {
 
 function calcAndRankTeams() {
   const teams = S.rosters.map(r => {
-    const players = [...(r.players||[]), ...(r.reserve||[])];
+    // r.players already includes IR (reserve) players — don't spread r.reserve separately or they double-count
+    // Use a Set to deduplicate just in case, and include taxi squad players who may not be in r.players
+    const players = [...new Set([...(r.players||[]), ...(r.taxi||[])])];
     let total=0, qb=0, rb=0, wr=0, te=0;
     const byPos = { QB:[], RB:[], WR:[], TE:[], K:[], DEF:[] };
 
@@ -1644,6 +1747,16 @@ function populateSuggestDropdown() {
   const prev = sel.value;
   sel.innerHTML = '<option value="">Select your team…</option>' +
     S.teamDynasty.map((t,i) => `<option value="${i}">${esc(teamName(t.roster))}</option>`).join('');
+
+  // Auto-select the logged-in user's team
+  if (S.myUserId) {
+    const myIdx = S.teamDynasty.findIndex(t => t.roster._user?.user_id === S.myUserId);
+    if (myIdx >= 0) {
+      sel.value = String(myIdx);
+      S.myRosterIdx = myIdx;
+      return;
+    }
+  }
   if (prev !== '') sel.value = prev;
 }
 function generateTradeSuggestions(myIdx) {
@@ -1846,7 +1959,7 @@ function loadSuggestionIntoCalc(idx) {
 }
 
 // ── Enter key ─────────────────────────────────────────
-document.getElementById('lg-input').addEventListener('keydown', e=>{ if(e.key==='Enter') loadLeague(); });
+document.getElementById('lg-input').addEventListener('keydown', e=>{ if(e.key==='Enter') findUserLeagues(); });
 </script>
 </body>
 </html>
