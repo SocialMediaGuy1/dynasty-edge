@@ -1501,15 +1501,9 @@ function renderTradeCalculator() {
     </div>
 
     <div class="suggest-section">
-      <div class="suggest-title">💡 Suggested Trades</div>
-      <div class="suggest-controls">
-        <select class="suggest-select" id="suggest-team-select">
-          <option value="">Select your team…</option>
-        </select>
-        <button class="suggest-btn" onclick="findSuggestedTrades()">Find Trades</button>
-      </div>
+      <div class="suggest-title">💡 Suggested Trades for Your Team</div>
       <div id="suggest-cards" class="suggest-cards">
-        <div class="suggest-empty">Select your team and click Find Trades to see deals that could improve your roster.</div>
+        <div class="suggest-empty">Loading dynasty values — suggestions will appear shortly.</div>
       </div>
     </div>
   `;
@@ -1742,22 +1736,13 @@ function updateVerdict() {
 
 // ── Suggested Trades ─────────────────────────────────
 function populateSuggestDropdown() {
-  const sel = document.getElementById('suggest-team-select');
-  if (!sel || !S.teamDynasty.length) return;
-  const prev = sel.value;
-  sel.innerHTML = '<option value="">Select your team…</option>' +
-    S.teamDynasty.map((t,i) => `<option value="${i}">${esc(teamName(t.roster))}</option>`).join('');
-
-  // Auto-select the logged-in user's team
+  // Resolve the user's roster index then auto-run suggestions
+  if (!S.teamDynasty.length) return;
   if (S.myUserId) {
     const myIdx = S.teamDynasty.findIndex(t => t.roster._user?.user_id === S.myUserId);
-    if (myIdx >= 0) {
-      sel.value = String(myIdx);
-      S.myRosterIdx = myIdx;
-      return;
-    }
+    if (myIdx >= 0) S.myRosterIdx = myIdx;
   }
-  if (prev !== '') sel.value = prev;
+  findSuggestedTrades();
 }
 function generateTradeSuggestions(myIdx) {
   const myTeam = S.teamDynasty[myIdx];
@@ -1848,18 +1833,17 @@ function generateTradeSuggestions(myIdx) {
 }
 
 function findSuggestedTrades() {
-  const sel = document.getElementById('suggest-team-select');
   const container = document.getElementById('suggest-cards');
-  if (!sel || !container) return;
+  if (!container) return;
 
-  const myIdx = parseInt(sel.value);
-  if (isNaN(myIdx)) {
-    container.innerHTML = '<div class="suggest-empty">Select your team first.</div>';
+  if (!S.dynastyLoaded || !S.teamDynasty.length) {
+    container.innerHTML = '<div class="suggest-empty">Dynasty values still loading — suggestions will appear once rankings finish.</div>';
     return;
   }
 
-  if (!S.dynastyLoaded || !S.teamDynasty.length) {
-    container.innerHTML = '<div class="suggest-empty">Dynasty values still loading — try again in a moment.</div>';
+  const myIdx = S.myRosterIdx;
+  if (myIdx == null || myIdx < 0) {
+    container.innerHTML = '<div class="suggest-empty">Sign in with your Sleeper username to see personalized trade suggestions.</div>';
     return;
   }
 
