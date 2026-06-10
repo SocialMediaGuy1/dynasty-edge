@@ -1,0 +1,1593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dynasty Edge — Sleeper Dynasty Tools</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght,wdth@6..144,1..1000,25..151&family=Inter:wght@400;600;700&family=Poppins:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --brand:#00FFF9;--brand-alt:#E7FE53;
+      --bg:#05091D;--border:#131B38;
+      --tp:#FFFFFF;--ts:#98B3D6;--tt:#5F7BA9;--td:#4C5E93;--ton:#05091D;
+      --success:#7CFF71;--warn:#FF7A00;--err:#FF6482;--info:#008CFF;
+      --g5:#344677;--g6:#25345D;--g7:#131B38;
+      --shadow:0 2px 15px rgba(5,9,29,.2);
+      --r-sm:8px;--r-md:12px;--r-lg:16px;--r-pill:9999px;
+      --fd:'Google Sans Flex','Poppins',Arial,sans-serif;
+      --fb:'Inter',system-ui,sans-serif;
+    }
+    body{background:var(--bg);color:var(--tp);font-family:var(--fb);min-height:100vh;-webkit-font-smoothing:antialiased}
+
+    /* ─── Header ─── */
+    header{
+      background:linear-gradient(180deg,rgba(8,13,39,.97) 0%,rgba(6,10,32,.97) 100%);
+      border-bottom:1px solid var(--border);padding:0 24px;height:58px;
+      display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:20;
+      box-shadow:var(--shadow);
+    }
+    .logo-icon{width:30px;height:30px;background:var(--brand);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .logo-icon svg{width:16px;height:16px}
+    .logo-text{font-family:var(--fd);font-weight:800;font-size:15px;color:var(--tp)}
+    .logo-text em{color:var(--brand);font-style:normal}
+
+    /* ─── Layout ─── */
+    main{max-width:1020px;margin:0 auto;padding:36px 16px 72px}
+
+    /* ─── Hero ─── */
+    .hero{text-align:center;margin-bottom:36px}
+    .hero-eye{font-family:var(--fd);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--brand);margin-bottom:10px}
+    .hero-h{font-family:var(--fd);font-size:46px;line-height:50px;font-weight:900;font-stretch:25%;color:var(--tp);margin-bottom:10px}
+    .hero-sub{font-size:14px;color:var(--ts);line-height:1.5}
+
+    /* ─── Search ─── */
+    .search-card{
+      background:linear-gradient(180deg,rgba(8,13,39,.9) 0%,rgba(6,10,32,.9) 100%);
+      border:1px solid var(--border);border-radius:var(--r-lg);padding:26px;
+      box-shadow:var(--shadow);margin-bottom:28px;
+    }
+    .field-label{font-family:var(--fd);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--tt);margin-bottom:8px;display:block}
+    .row{display:flex;gap:10px}
+    input.txt{
+      flex:1;background:var(--g7);border:1px solid var(--border);border-radius:var(--r-sm);
+      padding:0 14px;height:44px;font-size:14px;font-family:var(--fb);color:var(--tp);outline:none;
+      transition:border-color .15s,box-shadow .15s;
+    }
+    input.txt:focus{border-color:var(--brand);box-shadow:0 0 0 2px rgba(0,255,249,.1)}
+    input.txt::placeholder{color:var(--td)}
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;
+      height:44px;padding:0 26px;border-radius:var(--r-pill);background:var(--brand);
+      color:var(--ton);font-family:var(--fd);font-size:12px;font-weight:600;
+      letter-spacing:1px;text-transform:uppercase;border:none;cursor:pointer;
+      white-space:nowrap;transition:opacity .15s;flex-shrink:0;
+    }
+    .btn:hover{opacity:.87} .btn:disabled{opacity:.42;cursor:not-allowed}
+    .hint{margin-top:9px;font-size:12px;color:var(--tt)}
+    .hint a{color:var(--brand);text-decoration:none}
+
+    /* ─── Error / Loading ─── */
+    .err-box{
+      background:rgba(255,100,130,.1);border:1px solid rgba(255,100,130,.25);
+      border-radius:var(--r-md);padding:14px 18px;font-size:13px;color:var(--err);
+      margin-bottom:22px;display:none;
+    }
+    @keyframes shimmer{0%{background-position:-600px 0}100%{background-position:600px 0}}
+    .skel{border-radius:6px;background:linear-gradient(90deg,var(--g7) 25%,var(--g6) 50%,var(--g7) 75%);background-size:600px 100%;animation:shimmer 1.4s infinite linear}
+    #league-loading{display:none;padding:24px 0}
+    .skel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+    .skel-card{background:linear-gradient(180deg,rgba(8,13,39,.85) 0%,rgba(6,10,32,.85) 100%);border:1px solid var(--border);border-radius:var(--r-md);padding:18px;height:110px}
+
+    /* ─── League content ─── */
+    #league-content{display:none}
+
+    /* ─── League header ─── */
+    .lhdr{
+      display:flex;align-items:center;gap:16px;margin-bottom:26px;
+      padding:18px 22px;
+      background:linear-gradient(180deg,rgba(27,39,90,.5) 0%,rgba(5,9,29,.5) 70%);
+      border:1px solid var(--border);border-radius:var(--r-lg);
+    }
+    .l-av{width:52px;height:52px;border-radius:var(--r-md);object-fit:cover;border:1px solid var(--border);flex-shrink:0}
+    .l-av-ph{width:52px;height:52px;border-radius:var(--r-md);background:linear-gradient(135deg,rgba(0,255,249,.15),rgba(0,255,249,.04));border:1px solid rgba(0,255,249,.18);display:flex;align-items:center;justify-content:center;font-family:var(--fd);font-size:20px;font-weight:900;font-stretch:25%;color:var(--brand);flex-shrink:0}
+    .l-info{flex:1;min-width:0}
+    .l-name{font-family:var(--fd);font-size:20px;font-weight:700;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .l-meta{display:flex;align-items:center;gap:7px;margin-top:4px;flex-wrap:wrap}
+    .l-sub{font-size:13px;color:var(--ts)}
+    .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:var(--r-pill);font-family:var(--fd);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+    .badge-brand{background:rgba(0,255,249,.1);color:var(--brand);border:1px solid rgba(0,255,249,.2)}
+    .badge-lime{background:rgba(231,254,83,.08);color:var(--brand-alt);border:1px solid rgba(231,254,83,.18)}
+    .badge-muted{background:rgba(52,70,119,.5);color:var(--ts);border:1px solid var(--border)}
+
+    /* ─── Tabs ─── */
+    .tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:24px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .tab-btn{background:none;border:none;border-bottom:2px solid transparent;color:var(--ts);font-family:var(--fd);font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;padding:12px 18px 10px;margin-bottom:-1px;cursor:pointer;transition:color .15s,border-color .15s;white-space:nowrap}
+    .tab-btn:hover{color:var(--tp)}
+    .tab-btn.active{color:var(--tp);border-bottom-color:var(--brand)}
+    .tab-panel{display:none}
+    .tab-panel.active{display:block}
+    .overline{font-family:var(--fd);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--tt);margin-bottom:14px}
+
+    /* ─── Matchup cards ─── */
+    .mu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px}
+    .mu-card{background:linear-gradient(180deg,rgba(8,13,39,.85) 0%,rgba(6,10,32,.85) 100%);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--shadow)}
+    .mu-team{display:flex;align-items:center;padding:13px 15px;gap:11px;position:relative}
+    .mu-team.winning{background:rgba(124,255,113,.07)}
+    .mu-team.losing{background:rgba(255,100,130,.04)}
+    .win-bar{width:3px;position:absolute;left:0;top:0;bottom:0;background:var(--success);border-radius:0 2px 2px 0}
+    .t-av{width:38px;height:38px;border-radius:var(--r-pill);overflow:hidden;border:1px solid var(--border);flex-shrink:0}
+    .t-av img{width:100%;height:100%;object-fit:cover;display:block}
+    .t-av-ph{width:100%;height:100%;background:var(--g6);display:flex;align-items:center;justify-content:center;font-family:var(--fd);font-size:13px;font-weight:800;color:var(--ts)}
+    .t-info{flex:1;min-width:0}
+    .t-name{font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:-.15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .t-rec{font-size:11px;color:var(--tt);margin-top:2px}
+    .t-score{font-family:var(--fd);font-size:22px;font-weight:700;font-stretch:25%;flex-shrink:0;color:var(--td)}
+    .t-score.leading{color:var(--success)} .t-score.trailing{color:var(--tt)} .t-score.tied{color:var(--brand)}
+    .mu-vs{display:flex;align-items:center;padding:0 15px}
+    .vs-line{flex:1;height:1px;background:var(--border)}
+    .vs-lbl{font-family:var(--fd);font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--td);padding:0 9px}
+
+    /* ─── Standings ─── */
+    .tbl-wrap{background:linear-gradient(180deg,rgba(8,13,39,.85) 0%,rgba(6,10,32,.85) 100%);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--shadow)}
+    table{width:100%;border-collapse:collapse}
+    thead th{padding:11px 15px;text-align:left;font-family:var(--fd);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--tt);border-bottom:1px solid var(--border);background:rgba(5,9,29,.5);white-space:nowrap}
+    thead th:not(:first-child){text-align:right}
+    tbody tr{border-bottom:1px solid var(--border);transition:background .1s;cursor:default}
+    tbody tr:last-child{border-bottom:none}
+    tbody tr:hover{background:rgba(255,255,255,.03)}
+    tbody td{padding:11px 15px}
+    tbody td:not(:first-child){text-align:right;font-family:var(--fd);font-size:14px;font-weight:700;font-stretch:25%;color:var(--ts)}
+    .pf-val{color:var(--tp) !important}
+    .rank-cell{display:flex;align-items:center;gap:11px}
+    .rn{width:20px;text-align:center;font-family:var(--fd);font-size:13px;font-weight:700;font-stretch:25%;color:var(--td);flex-shrink:0}
+    .rn.r1{color:var(--brand)} .rn.r2{color:var(--ts)} .rn.r3{color:var(--tt)}
+    .s-av{width:34px;height:34px;border-radius:var(--r-pill);overflow:hidden;border:1px solid var(--border);flex-shrink:0}
+    .s-av img{width:100%;height:100%;object-fit:cover;display:block}
+    .s-av-ph{width:100%;height:100%;background:var(--g6);display:flex;align-items:center;justify-content:center;font-family:var(--fd);font-size:12px;font-weight:800;color:var(--ts)}
+    .s-team{font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:-.15px}
+    .s-user{font-size:11px;color:var(--tt);margin-top:1px}
+
+    /* ─── Dynasty tab ─── */
+    #dynasty-loading{display:none;padding:16px 0}
+    .dynasty-skel-rows{display:flex;flex-direction:column;gap:8px}
+    .dynasty-skel-row{height:48px;border-radius:var(--r-md);}
+
+    /* Dynasty overview table */
+    .dy-tbl-wrap{background:linear-gradient(180deg,rgba(8,13,39,.85) 0%,rgba(6,10,32,.85) 100%);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--shadow)}
+    .dy-tbl-wrap table thead th{padding:10px 14px}
+    .dy-tbl-wrap table tbody td{padding:10px 14px}
+    .dy-tbl-wrap tbody tr{cursor:pointer}
+    .dy-tbl-wrap tbody tr:hover{background:rgba(0,255,249,.04) !important}
+    .pos-cell{
+      display:inline-flex;align-items:center;justify-content:center;
+      min-width:40px;height:28px;padding:0 8px;border-radius:6px;
+      font-family:var(--fd);font-size:13px;font-weight:700;font-stretch:25%;
+    }
+    .pos-header{font-family:var(--fd);font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;text-align:center !important}
+    .pos-qb-hdr{color:#FFB3B3}
+    .pos-rb-hdr{color:#B3D4FF}
+    .pos-wr-hdr{color:#B3FFD4}
+    .pos-te-hdr{color:#D4B3FF}
+    .total-val{font-family:var(--fd);font-size:13px;font-weight:700;font-stretch:25%;color:var(--ts) !important;text-align:right !important}
+    .dy-rank-cell{display:flex;align-items:center;gap:10px}
+    .dy-rn{width:22px;text-align:center;font-family:var(--fd);font-size:12px;font-weight:700;font-stretch:25%;color:var(--td);flex-shrink:0}
+    .dy-rn.r1{color:var(--brand)} .dy-rn.r2{color:var(--ts)} .dy-rn.r3{color:var(--tt)}
+    .dy-team-name{font-family:var(--fd);font-size:14px;font-weight:700;letter-spacing:-.15px}
+    .dy-team-user{font-size:11px;color:var(--tt);margin-top:1px}
+    .click-hint{font-size:11px;color:var(--tt);text-align:right;margin-bottom:8px}
+    .click-hint span{color:var(--brand)}
+
+    /* ─── Team Detail ─── */
+    #dynasty-team{display:none}
+    .back-btn{
+      display:inline-flex;align-items:center;gap:6px;
+      background:none;border:1px solid var(--border);border-radius:var(--r-pill);
+      color:var(--ts);font-family:var(--fd);font-size:11px;font-weight:600;
+      letter-spacing:.5px;text-transform:uppercase;padding:7px 14px;cursor:pointer;
+      transition:color .15s,border-color .15s;margin-bottom:20px;
+    }
+    .back-btn:hover{color:var(--brand);border-color:rgba(0,255,249,.3)}
+    .team-detail-hdr{
+      background:linear-gradient(180deg,rgba(27,39,90,.5) 0%,rgba(5,9,29,.5) 70%);
+      border:1px solid var(--border);border-radius:var(--r-lg);
+      padding:20px 22px;margin-bottom:22px;
+    }
+    .td-top{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+    .td-av{width:48px;height:48px;border-radius:var(--r-pill);overflow:hidden;border:1px solid var(--border);flex-shrink:0}
+    .td-av img{width:100%;height:100%;object-fit:cover}
+    .td-av-ph{width:100%;height:100%;background:var(--g6);display:flex;align-items:center;justify-content:center;font-family:var(--fd);font-size:18px;font-weight:800;color:var(--ts)}
+    .td-names{flex:1;min-width:0}
+    .td-tname{font-family:var(--fd);font-size:20px;font-weight:800;letter-spacing:-.3px}
+    .td-uname{font-size:12px;color:var(--tt);margin-top:2px}
+    .td-rank-badge{font-family:var(--fd);font-size:13px;font-weight:700;font-stretch:25%;padding:5px 12px;border-radius:var(--r-pill);background:rgba(0,255,249,.12);color:var(--brand);border:1px solid rgba(0,255,249,.2)}
+    .pos-ranks-row{display:flex;gap:8px;flex-wrap:wrap}
+    .pos-rank-chip{
+      display:inline-flex;align-items:center;gap:5px;padding:5px 10px;
+      border-radius:var(--r-sm);font-family:var(--fd);font-size:11px;font-weight:700;
+      text-transform:uppercase;letter-spacing:.3px;
+    }
+    .pos-rank-chip .pos-tag{font-size:10px;opacity:.7}
+
+    /* ─── Two-col detail layout ─── */
+    .detail-layout{display:grid;grid-template-columns:260px 1fr;gap:20px;align-items:start}
+    @media(max-width:700px){.detail-layout{grid-template-columns:1fr}}
+
+    /* Radar */
+    .radar-card{background:linear-gradient(180deg,rgba(8,13,39,.85) 0%,rgba(6,10,32,.85) 100%);border:1px solid var(--border);border-radius:var(--r-md);padding:20px;box-shadow:var(--shadow);text-align:center}
+    .radar-title{font-family:var(--fd);font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--tt);margin-bottom:14px}
+
+    /* Roster breakdown */
+    .roster-card{background:linear-gradient(180deg,rgba(8,13,39,.85) 0%,rgba(6,10,32,.85) 100%);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--shadow)}
+    .pos-group{}
+    .pos-group-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:rgba(5,9,29,.4)}
+    .pos-group-title{font-family:var(--fd);font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase}
+    .pos-group-rank{font-family:var(--fd);font-size:11px;font-weight:700;font-stretch:25%;padding:2px 8px;border-radius:var(--r-pill);background:rgba(255,255,255,.07);color:var(--ts)}
+    .player-row{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid rgba(19,27,56,.6)}
+    .player-row:last-child{border-bottom:none}
+    .pl-num{width:16px;font-family:var(--fd);font-size:11px;font-weight:700;font-stretch:25%;color:var(--td);text-align:center;flex-shrink:0}
+    .pl-name{flex:1;font-family:var(--fd);font-size:13px;font-weight:700;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .pl-pos-tag{font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;padding:2px 5px;border-radius:4px;flex-shrink:0}
+    .pl-val{font-family:var(--fd);font-size:13px;font-weight:700;font-stretch:25%;color:var(--ts);flex-shrink:0;min-width:40px;text-align:right}
+
+    /* Position tag colors */
+    .pos-QB{background:rgba(255,100,130,.15);color:#FF9EB5}
+    .pos-RB{background:rgba(0,140,255,.15);color:#7CC8FF}
+    .pos-WR{background:rgba(124,255,113,.12);color:#8DFFA0}
+    .pos-TE{background:rgba(201,108,255,.12);color:#D88DFF}
+    .pos-K{background:rgba(255,220,0,.1);color:#FFE666}
+    .pos-DEF{background:rgba(255,122,0,.1);color:#FFB366}
+
+    /* Bar chart for value visualization */
+    .val-bar-wrap{flex:1;display:flex;align-items:center;gap:6px;min-width:0}
+    .val-bar-bg{flex:1;height:3px;background:var(--g7);border-radius:2px;overflow:hidden}
+    .val-bar-fill{height:100%;border-radius:2px;transition:width .3s ease}
+
+    /* Empty state */
+    .empty{text-align:center;padding:48px 24px;color:var(--tt)}
+    .empty-icon{font-size:36px;margin-bottom:14px;opacity:.6}
+    .empty-title{font-family:var(--fd);font-size:16px;font-weight:700;color:var(--ts);margin-bottom:7px}
+    .empty-sub{font-size:13px;line-height:1.5}
+
+    /* ─── Trade Calculator ─── */
+    .trade-layout{display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:start;margin-bottom:20px}
+    @media(max-width:680px){.trade-layout{grid-template-columns:1fr;}.trade-vs-col{display:none}}
+    .trade-side{background:linear-gradient(180deg,rgba(8,13,39,.85) 0%,rgba(6,10,32,.85) 100%);border:1px solid var(--border);border-radius:var(--r-lg);overflow:visible;padding:16px}
+    .trade-side-hdr{font-family:var(--fd);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--tt);margin-bottom:12px}
+    .trade-search-wrap{position:relative;margin-bottom:12px}
+    .trade-search{width:100%;background:var(--g7);border:1px solid var(--border);border-radius:var(--r-sm);padding:0 12px;height:40px;font-size:13px;font-family:var(--fb);color:var(--tp);outline:none;transition:border-color .15s}
+    .trade-search:focus{border-color:var(--brand);box-shadow:0 0 0 2px rgba(0,255,249,.1)}
+    .trade-search::placeholder{color:var(--td)}
+    .trade-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#0D1532;border:1px solid var(--border);border-radius:var(--r-md);z-index:50;max-height:220px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5);display:none}
+    .trade-dropdown.open{display:block}
+    .trade-dd-item{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;transition:background .1s;border-bottom:1px solid rgba(19,27,56,.5)}
+    .trade-dd-item:last-child{border-bottom:none}
+    .trade-dd-item:hover{background:rgba(0,255,249,.06)}
+    .trade-dd-name{flex:1;font-family:var(--fd);font-size:13px;font-weight:700;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .trade-dd-meta{font-size:11px;color:var(--tt);flex-shrink:0}
+    .trade-dd-val{font-family:var(--fd);font-size:12px;font-weight:700;font-stretch:25%;color:var(--brand);flex-shrink:0;min-width:36px;text-align:right}
+    .trade-items{display:flex;flex-direction:column;gap:6px;min-height:60px}
+    .trade-empty-hint{font-size:12px;color:var(--td);text-align:center;padding:16px 0}
+    .trade-item{display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(19,27,56,.7);border:1px solid var(--border);border-radius:var(--r-sm)}
+    .trade-item-name{flex:1;font-family:var(--fd);font-size:13px;font-weight:700;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .trade-item-val{font-family:var(--fd);font-size:13px;font-weight:700;font-stretch:25%;color:var(--brand);flex-shrink:0}
+    .trade-item-remove{background:none;border:none;color:var(--td);font-size:16px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;transition:color .1s}
+    .trade-item-remove:hover{color:var(--err)}
+    .trade-total-row{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+    .trade-total-label{font-family:var(--fd);font-size:11px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--tt)}
+    .trade-total-val{font-family:var(--fd);font-size:20px;font-weight:800;font-stretch:25%;color:var(--tp)}
+    .trade-vs-col{display:flex;flex-direction:column;align-items:center;justify-content:center;padding-top:60px;gap:8px}
+    .trade-vs-label{font-family:var(--fd);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--td)}
+
+    /* Verdict bar */
+    .trade-verdict{background:linear-gradient(180deg,rgba(8,13,39,.85) 0%,rgba(6,10,32,.85) 100%);border:1px solid var(--border);border-radius:var(--r-lg);padding:20px 24px;margin-bottom:20px}
+    .verdict-bar-wrap{height:10px;background:var(--g7);border-radius:var(--r-pill);margin:12px 0;overflow:hidden;position:relative}
+    .verdict-bar-fill{height:100%;transition:width .4s ease,left .4s ease,background .4s ease;position:absolute;top:0}
+    .verdict-bar-mid{position:absolute;top:0;bottom:0;left:50%;width:2px;background:rgba(255,255,255,.15);transform:translateX(-50%);z-index:2}
+    /* Fair zone: shaded band in the center of the bar */
+    .verdict-fair-zone{position:absolute;top:0;bottom:0;background:rgba(0,255,249,.13);border-left:1px solid rgba(0,255,249,.25);border-right:1px solid rgba(0,255,249,.25);z-index:1;transition:width .3s ease,left .3s ease}
+    .verdict-labels{display:flex;justify-content:space-between;font-family:var(--fd);font-size:11px;font-weight:700;letter-spacing:.3px;color:var(--tt)}
+    .verdict-main{font-family:var(--fd);font-size:18px;font-weight:800;font-stretch:25%;text-align:center}
+    .verdict-sub{font-size:12px;color:var(--tt);text-align:center;margin-top:4px}
+    .verdict-win{color:var(--success)} .verdict-lose{color:var(--err)} .verdict-even{color:var(--brand)}
+
+    /* Pick buttons */
+    .pick-section{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+    .pick-section-label{font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--td);margin-bottom:8px}
+    .pick-grid{display:flex;flex-wrap:wrap;gap:5px}
+    .pick-btn{background:rgba(19,27,56,.8);border:1px solid var(--border);border-radius:var(--r-pill);color:var(--ts);font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:.3px;padding:4px 10px;cursor:pointer;transition:background .1s,border-color .1s,color .1s}
+    .pick-btn:hover{background:rgba(0,255,249,.1);border-color:rgba(0,255,249,.3);color:var(--brand)}
+
+    @media(max-width:600px){
+      .row{flex-direction:column}
+      .btn{width:100%}
+      .hero-h{font-size:34px;line-height:38px}
+      .hide-sm{display:none}
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <img src="https://pbs.twimg.com/profile_images/2008631587919872001/CY-7MMLV_400x400.jpg" alt="Sleeper" style="height:32px;width:32px;border-radius:8px;flex-shrink:0;object-fit:cover" onerror="this.style.display='none'"/>
+  <span class="logo-text" style="margin-left:8px">Dynasty <em>Edge</em></span>
+</header>
+
+<main>
+  <div class="hero">
+    <h1 class="hero-h">SLEEPER<br>DYNASTY EDGE</h1>
+    <div class="hero-eye" style="margin-top:10px;margin-bottom:10px;">Powered by Sleeper</div>
+    <p class="hero-sub">Enter your Sleeper league ID to rank every dynasty roster, break down team strengths by position, and evaluate trades with live player values.</p>
+  </div>
+
+  <div class="search-card">
+    <label class="field-label" for="lg-input">League ID</label>
+    <div class="row">
+      <input type="text" id="lg-input" class="txt" placeholder="e.g. 1048270803320283136" autocomplete="off" spellcheck="false"/>
+      <button class="btn" id="load-btn" onclick="loadLeague()">Load</button>
+    </div>
+    <p class="hint">Find your ID in Sleeper → League → Settings, or in the URL at <a href="https://sleeper.app" target="_blank">sleeper.app</a></p>
+  </div>
+
+  <div class="err-box" id="err-box"></div>
+
+  <div id="league-loading">
+    <div class="skel-grid">
+      <div class="skel-card"><div class="skel" style="height:12px;width:55%;margin-bottom:14px"></div><div class="skel" style="height:10px;width:40%;margin-bottom:10px"></div><div class="skel" style="height:10px;width:50%"></div></div>
+      <div class="skel-card"><div class="skel" style="height:12px;width:55%;margin-bottom:14px"></div><div class="skel" style="height:10px;width:40%;margin-bottom:10px"></div><div class="skel" style="height:10px;width:50%"></div></div>
+      <div class="skel-card"><div class="skel" style="height:12px;width:55%;margin-bottom:14px"></div><div class="skel" style="height:10px;width:40%;margin-bottom:10px"></div><div class="skel" style="height:10px;width:50%"></div></div>
+      <div class="skel-card"><div class="skel" style="height:12px;width:55%;margin-bottom:14px"></div><div class="skel" style="height:10px;width:40%;margin-bottom:10px"></div><div class="skel" style="height:10px;width:50%"></div></div>
+    </div>
+  </div>
+
+  <div id="league-content">
+    <!-- League header -->
+    <div class="lhdr">
+      <div id="l-icon"></div>
+      <div class="l-info">
+        <div class="l-name" id="l-name"></div>
+        <div class="l-meta">
+          <span class="l-sub" id="l-sub"></span>
+          <span class="badge badge-lime" id="l-season"></span>
+          <span class="badge badge-muted" id="l-status"></span>
+          <span class="badge badge-brand" id="l-format" style="display:none"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" id="dynasty-tab-btn" onclick="switchDynasty()">Dynasty Rankings</button>
+      <button class="tab-btn" onclick="switchTab('trade',this)">Trade Calculator</button>
+    </div>
+
+    <!-- Trade Calculator -->
+    <div class="tab-panel" id="tab-trade"></div>
+
+    <!-- Dynasty -->
+    <div class="tab-panel" id="tab-dynasty">
+      <!-- Loading dynasty values -->
+      <div id="dynasty-loading">
+        <p id="dynasty-loading-msg" style="font-size:12px;color:var(--tt);margin-bottom:12px;text-align:center;">Loading dynasty values…</p>
+        <div class="dynasty-skel-rows">
+          <div class="skel dynasty-skel-row"></div><div class="skel dynasty-skel-row"></div>
+          <div class="skel dynasty-skel-row"></div><div class="skel dynasty-skel-row"></div>
+          <div class="skel dynasty-skel-row"></div><div class="skel dynasty-skel-row"></div>
+        </div>
+      </div>
+
+      <!-- Overview table -->
+      <div id="dynasty-overview" style="display:none">
+        <p id="dynasty-source-note" style="font-size:11px;color:var(--td);margin-bottom:10px;">Dynasty values adjusted by Sleeper full-season projections (±35%). SF QBs weighted heavily.</p>
+        <p class="click-hint">Click a team to see their full breakdown <span>→</span></p>
+        <div class="dy-tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Team</th>
+                <th style="text-align:right">Value</th>
+                <th class="pos-header pos-qb-hdr">QB</th>
+                <th class="pos-header pos-rb-hdr">RB</th>
+                <th class="pos-header pos-wr-hdr">WR</th>
+                <th class="pos-header pos-te-hdr">TE</th>
+              </tr>
+            </thead>
+            <tbody id="dynasty-overview-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Team detail -->
+      <div id="dynasty-team">
+        <button class="back-btn" onclick="showDynastyOverview()">
+          ← Back to rankings
+        </button>
+        <div class="team-detail-hdr">
+          <div class="td-top">
+            <div class="td-av" id="td-avatar"></div>
+            <div class="td-names">
+              <div class="td-tname" id="td-tname"></div>
+              <div class="td-uname" id="td-uname"></div>
+            </div>
+            <div class="td-rank-badge" id="td-overall-rank"></div>
+          </div>
+          <div class="pos-ranks-row" id="td-pos-ranks"></div>
+        </div>
+        <div class="detail-layout">
+          <div class="radar-card">
+            <div class="radar-title">Positional Strength</div>
+            <div id="radar-svg"></div>
+          </div>
+          <div class="roster-card" id="td-roster"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const API = 'https://api.sleeper.app/v1';
+const CDN = 'https://sleepercdn.com/avatars/thumbs';
+
+// ── Global state ──────────────────────────────────────
+const S = {
+  league: null, rosters: [], rosterMap: {},
+  nflState: null,
+  valueMap: {},
+  teamDynasty: [],
+  dynastyLoaded: false,
+  fcMap: null,
+  isSF: false,
+  _allPlayers: null,
+  valueSource: null,
+};
+
+// ── KTC-style dynasty values [name, SF, 1QB] ──────────
+// Covers ~180 key players. Age formula used as fallback for anyone not listed.
+const KTC = [
+  // QBs
+  ["Josh Allen",9500,7200],["Lamar Jackson",9300,7000],["Patrick Mahomes",8900,6600],
+  ["Joe Burrow",8700,6400],["Justin Herbert",8300,6000],["Caleb Williams",8800,6600],
+  ["Jayden Daniels",8700,6400],["CJ Stroud",8600,6200],["C.J. Stroud",8600,6200],
+  ["Drake Maye",8500,6200],["Jalen Hurts",8100,5700],["Jordan Love",8000,5500],
+  ["Trevor Lawrence",7500,5000],["Brock Purdy",7300,4800],["Anthony Richardson",7000,4700],
+  ["Bo Nix",7500,5000],["Michael Penix Jr",6200,4000],["Michael Penix Jr.",6200,4000],
+  ["Dak Prescott",6600,4200],["Tua Tagovailoa",6500,4100],["Kyler Murray",6700,4300],
+  ["Sam Darnold",6500,4000],["Baker Mayfield",5800,3400],["Bryce Young",6500,4200],
+  ["Justin Fields",5700,3300],["Will Levis",5700,3300],["Sam Howell",5500,3000],
+  ["Kenny Pickett",5000,2800],["Geno Smith",3800,2000],["Deshaun Watson",4000,2200],
+  ["Daniel Jones",4000,2200],["Kirk Cousins",4200,2200],["Aaron Rodgers",3200,1600],
+  ["Matthew Stafford",3500,1800],["Russell Wilson",3000,1500],["Kyler Murray",6700,4300],
+  // RBs
+  ["Bijan Robinson",9800,9800],["Jahmyr Gibbs",9600,9600],["Breece Hall",9100,9100],
+  ["Devon Achane",8900,8900],["De'Von Achane",8900,8900],["James Cook",8600,8600],
+  ["Kyren Williams",8100,8100],["Bucky Irving",7900,7900],["Jonathan Taylor",7200,7200],
+  ["Jonathon Brooks",7800,7800],["Saquon Barkley",7600,7600],["Josh Jacobs",6600,6600],
+  ["Christian McCaffrey",7400,7400],["Travis Etienne",6700,6700],["Travis Etienne Jr.",6700,6700],
+  ["Kenneth Walker III",6700,6700],["Isiah Pacheco",6700,6700],["Rachaad White",6600,6600],
+  ["Tony Pollard",6100,6100],["Zach Charbonnet",6100,6100],["Tyjae Spears",6600,6600],
+  ["Chase Brown",5700,5700],["D'Andre Swift",6100,6100],["David Montgomery",5600,5600],
+  ["Chuba Hubbard",5600,5600],["Alvin Kamara",5600,5600],["Jaylen Warren",5600,5600],
+  ["Brian Robinson Jr.",5600,5600],["Rico Dowdle",5600,5600],["Najee Harris",5100,5100],
+  ["Aaron Jones",5100,5100],["Joe Mixon",5500,5500],["Derrick Henry",5100,5100],
+  ["Tyler Allgeier",5100,5100],["Roschon Johnson",5100,5100],["Dameon Pierce",4600,4600],
+  ["Devin Singletary",4600,4600],["Cam Akers",4100,4100],["Austin Ekeler",4100,4100],
+  ["Ezekiel Elliott",3600,3600],["Kareem Hunt",3600,3600],["Raheem Mostert",3100,3100],
+  ["Clyde Edwards-Helaire",3600,3600],["Miles Sanders",3600,3600],
+  // WRs
+  ["CeeDee Lamb",9800,9800],["Justin Jefferson",9700,9700],["Ja'Marr Chase",9600,9600],
+  ["Amon-Ra St. Brown",9100,9100],["Puka Nacua",8900,8900],["Malik Nabers",9000,9000],
+  ["Marvin Harrison Jr.",8800,8800],["Marvin Harrison",8800,8800],
+  ["Brian Thomas Jr.",8600,8600],["Rome Odunze",8300,8300],
+  ["Ladd McConkey",8100,8100],["Xavier Worthy",8100,8100],["Garrett Wilson",8600,8600],
+  ["Rashee Rice",8100,8100],["George Pickens",8100,8100],["Drake London",8100,8100],
+  ["Jordan Addison",7600,7600],["Chris Olave",7600,7600],["Tank Dell",7100,7100],
+  ["A.J. Brown",7600,7600],["AJ Brown",7600,7600],
+  ["DeVonta Smith",7100,7100],["Tee Higgins",7100,7100],["Jayden Reed",7600,7600],
+  ["Michael Pittman Jr.",6600,6600],["Zay Flowers",7100,7100],["Terry McLaurin",6100,6100],
+  ["Quentin Johnston",6100,6100],["Josh Downs",5600,5600],["Khalil Shakir",5600,5600],
+  ["Keon Coleman",6600,6600],["Roman Wilson",6100,6100],["Ricky Pearsall",6600,6600],
+  ["Adonai Mitchell",6100,6100],["Xavier Legette",5600,5600],["Troy Franklin",5600,5600],
+  ["Jahan Dotson",5600,5600],["Christian Watson",5600,5600],["Cedric Tillman",5600,5600],
+  ["Luke McCaffrey",5100,5100],["Wan'Dale Robinson",5100,5100],["Devaughn Vele",5100,5100],
+  ["Jalen McMillan",5100,5100],["DJ Moore",6100,6100],["D.J. Moore",6100,6100],
+  ["Courtland Sutton",5600,5600],["Mike Evans",5600,5600],["Darnell Mooney",4600,4600],
+  ["Christian Kirk",5100,5100],["Amari Cooper",5100,5100],["Cooper Kupp",5100,5100],
+  ["Calvin Ridley",5100,5100],["Diontae Johnson",5100,5100],["Gabe Davis",5100,5100],
+  ["Treylon Burks",4600,4600],["Alec Pierce",4600,4600],["Tyler Boyd",4100,4100],
+  ["Davante Adams",4100,4100],["Stefon Diggs",4100,4100],["Odell Beckham Jr.",3100,3100],
+  ["Keenan Allen",3600,3600],["Tyler Lockett",3600,3600],["Brandin Cooks",3100,3100],
+  ["Adam Thielen",2600,2600],["JuJu Smith-Schuster",2600,2600],
+  // TEs
+  ["Brock Bowers",8600,8600],["Trey McBride",7900,7900],["Sam LaPorta",7600,7600],
+  ["Tyler Warren",7600,7600],["Colston Loveland",7100,7100],["Harold Fannin Jr.",6600,6600],
+  ["Tucker Kraft",6600,6600],["Jake Ferguson",6600,6600],["Kyle Pitts",6600,6600],
+  ["Mark Andrews",6600,6600],["George Kittle",6100,6100],["Dalton Kincaid",6100,6100],
+  ["Cole Kmet",6100,6100],["Isaiah Likely",5600,5600],["Chigoziem Okonkwo",5600,5600],
+  ["David Njoku",5600,5600],["Evan Engram",5600,5600],["Cade Otton",5600,5600],
+  ["Juwan Johnson",5100,5100],["Pat Freiermuth",5100,5100],["Mason Taylor",5600,5600],
+  ["Theo Johnson",5600,5600],["Ben Sinnott",5100,5100],["Ja'Tavion Sanders",5100,5100],
+  ["Travis Kelce",5100,5100],["Jonnu Smith",4600,4600],["Dalton Schultz",4600,4600],
+  ["Hunter Henry",4600,4600],["Tyler Higbee",4100,4100],["Gerald Everett",3600,3600],
+];
+
+// Build name→value lookup (normalized: lowercase, strip punctuation)
+function normName(s) {
+  return String(s).toLowerCase().replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();
+}
+const KTC_MAP = {};
+KTC.forEach(([name, sf, oneqb]) => { KTC_MAP[normName(name)] = { sf, oneqb }; });
+
+// ── Helpers ───────────────────────────────────────────
+// Sleeper's API returns Access-Control-Allow-Origin: *, so direct fetch works
+// even from file://. Only fall back to proxies if the direct request fails.
+const PROXIES = [
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+];
+
+async function apiFetch(url) {
+  // Always try direct first — Sleeper allows cross-origin requests
+  try {
+    const r = await fetch(url);
+    if (r.ok) return r.json();
+  } catch(e) { /* fall through to proxy */ }
+  // Proxy fallback for environments that block direct fetches
+  for (const makeProxy of PROXIES) {
+    try {
+      const r = await fetch(makeProxy(url));
+      if (r.ok) return r.json();
+    } catch(e) { /* try next */ }
+  }
+  throw new Error('Request failed — check your internet connection.');
+}
+
+// Cache for the large (5 MB) players file — fetched once per session
+let _playersCache = null;
+async function fetchPlayers() {
+  if (_playersCache) return _playersCache;
+  // Try sessionStorage first (persists across refreshes within the tab session)
+  try {
+    const stored = sessionStorage.getItem('sleeperPlayers');
+    if (stored) { _playersCache = JSON.parse(stored); return _playersCache; }
+  } catch(e) {}
+  _playersCache = await apiFetch('https://api.sleeper.app/v1/players/nfl');
+  try { sessionStorage.setItem('sleeperPlayers', JSON.stringify(_playersCache)); } catch(e) {}
+  return _playersCache;
+}
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function showErr(m) { const e=document.getElementById('err-box'); e.textContent=m; e.style.display='block'; }
+function hideErr() { document.getElementById('err-box').style.display='none'; }
+
+function mkAvatar(avatarId, size, radius, initials, extraStyle='') {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = `width:${size}px;height:${size}px;border-radius:${radius};overflow:hidden;border:1px solid var(--border);flex-shrink:0;${extraStyle}`;
+  const fill = () => {
+    const ph = document.createElement('div');
+    ph.style.cssText = `width:100%;height:100%;background:var(--g6);display:flex;align-items:center;justify-content:center;font-family:var(--fd);font-size:${Math.round(size*.35)}px;font-weight:800;color:var(--ts);`;
+    ph.textContent = (initials||'?')[0].toUpperCase();
+    wrap.appendChild(ph);
+  };
+  if (avatarId) {
+    const img = document.createElement('img');
+    img.src = `${CDN}/${avatarId}`;
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+    img.onerror = () => { wrap.innerHTML=''; fill(); };
+    wrap.appendChild(img);
+  } else { fill(); }
+  return wrap;
+}
+
+function teamName(roster) {
+  const u = roster._user;
+  return u?.metadata?.team_name || u?.display_name || `Team ${roster.roster_id}`;
+}
+function teamRecord(roster) {
+  const s = roster.settings||{};
+  return `${s.wins??0}W · ${s.losses??0}L${(s.ties??0)?` · ${s.ties}T`:''}`;
+}
+
+// ── Tab switching ─────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+}
+
+function switchDynasty() {
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('dynasty-tab-btn').classList.add('active');
+  document.getElementById('tab-dynasty').classList.add('active');
+  if (!S.dynastyLoaded) loadDynastyValues();
+}
+
+// ── Load league ───────────────────────────────────────
+async function loadLeague() {
+  const lid = document.getElementById('lg-input').value.trim();
+  if (!lid) { showErr('Please enter a league ID.'); return; }
+  hideErr();
+  document.getElementById('league-loading').style.display = 'block';
+  document.getElementById('league-content').style.display = 'none';
+  document.getElementById('load-btn').disabled = true;
+  S.dynastyLoaded = false;
+
+  try {
+    const [league, users, rosters, nflState] = await Promise.all([
+      apiFetch(`${API}/league/${lid}`),
+      apiFetch(`${API}/league/${lid}/users`),
+      apiFetch(`${API}/league/${lid}/rosters`),
+      apiFetch(`${API}/state/nfl`),
+    ]);
+
+    // Build maps
+    const userMap = {};
+    users.forEach(u => userMap[u.user_id] = u);
+    S.rosters = rosters;
+    S.rosterMap = {};
+    rosters.forEach(r => { r._user = userMap[r.owner_id]||null; S.rosterMap[r.roster_id] = r; });
+    S.league = league;
+    S.nflState = nflState;
+
+    // Find best matchup week
+    const { week, matchups } = await findBestWeek(lid, league, nflState);
+
+    renderLeagueHeader(league);
+
+    document.getElementById('league-loading').style.display = 'none';
+    document.getElementById('league-content').style.display = 'block';
+
+    // Reset dynasty tab and auto-load dynasty values
+    document.getElementById('dynasty-overview').style.display = 'none';
+    document.getElementById('dynasty-team').style.display = 'none';
+    document.getElementById('dynasty-loading').style.display = 'none';
+    S.dynastyLoaded = false;
+
+    // Activate dynasty tab by default and load
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('dynasty-tab-btn').classList.add('active');
+    document.getElementById('tab-dynasty').classList.add('active');
+    loadDynastyValues();
+
+    // Build trade calculator UI
+    renderTradeCalculator();
+
+  } catch(e) {
+    document.getElementById('league-loading').style.display = 'none';
+    showErr(`Couldn't load league. Check the ID and try again. (${e.message})`);
+  } finally {
+    document.getElementById('load-btn').disabled = false;
+  }
+}
+
+async function findBestWeek(lid, league, nflState) {
+  const playoffStart = league.settings?.playoff_week_start;
+  const maxW = (playoffStart && playoffStart > 1) ? playoffStart - 1 : 17;
+  const nflWeek = Math.max(1, nflState.display_week || nflState.week || 1);
+  const startWeek = Math.min(nflWeek, maxW);
+
+  if (league.status === 'complete') {
+    for (let w = maxW; w >= 1; w--) {
+      const data = await apiFetch(`${API}/league/${lid}/matchups/${w}`);
+      if (data?.length && data.some(m => (m.points||0) > 0)) return { week: w, matchups: data };
+    }
+    return { week: 1, matchups: [] };
+  }
+  for (let w = startWeek; w >= 1; w--) {
+    const data = await apiFetch(`${API}/league/${lid}/matchups/${w}`);
+    if (data?.length) return { week: w, matchups: data };
+  }
+  return { week: 1, matchups: [] };
+}
+
+// ── League header ─────────────────────────────────────
+function renderLeagueHeader(league) {
+  const wrap = document.getElementById('l-icon');
+  wrap.innerHTML = '';
+  wrap.appendChild(mkAvatar(league.avatar, 52, 'var(--r-md)', league.name));
+
+  document.getElementById('l-name').textContent = league.name || 'Unnamed League';
+  document.getElementById('l-sub').textContent = `${league.total_rosters} teams · ${(league.sport||'NFL').toUpperCase()}`;
+  document.getElementById('l-season').textContent = league.season || '';
+
+  const statusMap = { pre_draft:'Pre-Draft', drafting:'Drafting', in_season:'In Season', complete:'Complete' };
+  document.getElementById('l-status').textContent = statusMap[league.status] || league.status || '';
+
+  // Detect format
+  const positions = league.roster_positions || [];
+  const isSF = positions.includes('SUPER_FLEX');
+  const qbCount = positions.filter(p => p === 'QB').length;
+  const fmtEl = document.getElementById('l-format');
+  if (isSF) { fmtEl.textContent = 'SuperFlex'; fmtEl.style.display = ''; }
+  else if (qbCount > 1) { fmtEl.textContent = `${qbCount}QB`; fmtEl.style.display = ''; }
+  else { fmtEl.style.display = 'none'; }
+}
+
+// ── Matchups ──────────────────────────────────────────
+function renderMatchups(matchups, week) {
+  document.getElementById('mu-label').textContent = `Week ${week} Matchups`;
+  const grid = document.getElementById('mu-grid');
+  grid.innerHTML = '';
+
+  if (!matchups?.length) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="empty-icon">🏈</div><div class="empty-title">No matchups yet</div><div class="empty-sub">Check back once the season kicks off.</div></div>`;
+    return;
+  }
+
+  const groups = {};
+  matchups.forEach(m => { if(!groups[m.matchup_id]) groups[m.matchup_id]=[]; groups[m.matchup_id].push(m); });
+
+  Object.values(groups).sort((a,b)=>a[0].matchup_id-b[0].matchup_id).forEach(pair => {
+    const [t1, t2] = pair;
+    const s1 = parseFloat(t1?.points||0), s2 = parseFloat(t2?.points||0);
+    const hasScores = s1>0||s2>0;
+    const card = document.createElement('div');
+    card.className = 'mu-card';
+    let r1='',r2='',b1='',b2='';
+    if(hasScores){
+      if(s1>s2){r1='leading';r2='trailing';b1='winning';b2='losing'}
+      else if(s2>s1){r1='trailing';r2='leading';b1='losing';b2='winning'}
+      else{r1=r2='tied'}
+    }
+    card.appendChild(makeMuRow(t1,s1,r1,b1,b1==='winning'));
+    const vs=document.createElement('div');vs.className='mu-vs';
+    vs.innerHTML='<div class="vs-line"></div><span class="vs-lbl">VS</span><div class="vs-line"></div>';
+    card.appendChild(vs);
+    if(t2) card.appendChild(makeMuRow(t2,s2,r2,b2,b2==='winning'));
+    grid.appendChild(card);
+  });
+}
+
+function makeMuRow(entry, score, scoreClass, rowClass, showBar) {
+  if (!entry) return document.createElement('div');
+  const r = S.rosterMap[entry.roster_id];
+  const name = r ? teamName(r) : `Team ${entry.roster_id}`;
+  const record = r ? teamRecord(r) : '';
+  const avatarId = r?._user?.avatar;
+
+  const row = document.createElement('div');
+  row.className = 'mu-team' + (rowClass?' '+rowClass:'');
+  if (showBar) { const b=document.createElement('div'); b.className='win-bar'; row.appendChild(b); }
+
+  row.appendChild(mkAvatar(avatarId, 38, 'var(--r-pill)', name));
+  const info = document.createElement('div'); info.className='t-info';
+  info.innerHTML = `<div class="t-name">${esc(name)}</div>${record?`<div class="t-rec">${esc(record)}</div>`:''}`;
+  row.appendChild(info);
+  const sc = document.createElement('div');
+  sc.className = 't-score'+(scoreClass?' '+scoreClass:'');
+  sc.textContent = score>0?score.toFixed(2):'—';
+  row.appendChild(sc);
+  return row;
+}
+
+// ── Standings ─────────────────────────────────────────
+function renderStandings() {
+  const sorted = [...S.rosters].sort((a,b)=>{
+    const dw=(b.settings?.wins??0)-(a.settings?.wins??0);
+    if(dw!==0) return dw;
+    const pa=(a.settings?.fpts??0)+(a.settings?.fpts_decimal??0)/100;
+    const pb=(b.settings?.fpts??0)+(b.settings?.fpts_decimal??0)/100;
+    return pb-pa;
+  });
+  const tbody = document.getElementById('standings-body');
+  tbody.innerHTML = '';
+  sorted.forEach((r,i)=>{
+    const s=r.settings||{};
+    const pf=(s.fpts??0)+(s.fpts_decimal??0)/100;
+    const pa=(s.fpts_against??0)+(s.fpts_against_decimal??0)/100;
+    const rank=i+1;
+    const tr=document.createElement('tr');
+    // team cell
+    const td=document.createElement('td');
+    const cell=document.createElement('div'); cell.className='rank-cell';
+    const rn=document.createElement('div'); rn.className='rn'+(rank<=3?` r${rank}`:''); rn.textContent=rank;
+    cell.appendChild(rn);
+    cell.appendChild(mkAvatar(r._user?.avatar, 34, 'var(--r-pill)', teamName(r)));
+    const names=document.createElement('div');
+    names.innerHTML=`<div class="s-team">${esc(teamName(r))}</div>${(r._user?.display_name&&r._user?.metadata?.team_name)?`<div class="s-user">${esc(r._user.display_name)}</div>`:''}`;
+    cell.appendChild(names); td.appendChild(cell); tr.appendChild(td);
+    [[s.wins??0],[s.losses??0],[s.ties??0,'hide-sm'],[pf.toFixed(2),'','pf-val'],[pa.toFixed(2),'hide-sm']].forEach(([v,c1,c2])=>{
+      const t=document.createElement('td');
+      if(c1) t.className=c1; if(c2) t.className+=(t.className?' ':'')+c2;
+      t.textContent=v; tr.appendChild(t);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+// ── Dynasty: load values ──────────────────────────────
+// Priority: KTC hardcoded values → age/formula fallback.
+// Then layered with Sleeper projected points as a ±modifier.
+
+function calcDynastyScore(p, isSF) {
+  // 1. Try KTC lookup first
+  const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim();
+  const ktc = KTC_MAP[normName(fullName)];
+  if (ktc) {
+    const baseVal = isSF ? ktc.sf : ktc.oneqb;
+    // Still discount FAs a little
+    const teamPenalty = (!p.team || p.team === 'FA') ? 0.85 : 1.0;
+    return Math.round(baseVal * teamPenalty);
+  }
+
+  // 2. Age/position formula fallback for unlisted players
+  if (!p) return 0;
+  const pos = p.position;
+  const bases = { QB: isSF ? 5500 : 3200, RB: 5500, WR: 5000, TE: 3500 };
+  const base = bases[pos];
+  if (!base) return 0;
+
+  const status = (p.status || '').toLowerCase();
+  if (status === 'inactive' || status === 'retired') return 0;
+
+  const age = parseFloat(p.age) || 28;
+  let ageMult;
+  if (age <= 22)      ageMult = 1.00;
+  else if (age <= 26) ageMult = 1.00 - (age - 22) * 0.05;
+  else if (age <= 30) ageMult = 0.80 - (age - 26) * 0.10;
+  else if (age <= 34) ageMult = 0.40 - (age - 30) * 0.09;
+  else                ageMult = 0.02;
+  ageMult = Math.max(0, ageMult);
+
+  const teamPenalty = (!p.team || p.team === 'FA') ? 0.7 : 1.0;
+  return Math.round(base * ageMult * teamPenalty);
+}
+
+// Try FantasyCalc directly from user's browser (no proxy — proxy IPs are blocked by FC).
+// Returns normalizedName → value map, or null if unavailable.
+async function fetchFantasyCalcValues(isSF) {
+  const numQbs = isSF ? 2 : 1;
+  const url = `https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=${numQbs}&ppr=1`;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (!Array.isArray(data)) return null;
+    const map = {};
+    data.forEach(entry => {
+      // FantasyCalc shape: { value, player: { name, position, ... } }
+      const name = entry?.player?.name || entry?.name || '';
+      const value = entry?.value ?? 0;
+      if (name && value > 0) map[normName(name)] = value;
+    });
+    return Object.keys(map).length > 0 ? map : null;
+  } catch(e) {
+    return null;
+  }
+}
+
+async function loadDynastyValues() {
+  document.getElementById('dynasty-loading').style.display = 'block';
+  document.getElementById('dynasty-overview').style.display = 'none';
+  document.getElementById('dynasty-team').style.display = 'none';
+
+  const setMsg = t => {
+    const el = document.getElementById('dynasty-loading-msg');
+    if (el) el.textContent = t;
+  };
+
+  try {
+    const isSF = (S.league?.roster_positions || []).includes('SUPER_FLEX');
+
+    // Collect all player IDs across all rosters
+    const allPlayerIds = new Set();
+    S.rosters.forEach(r => {
+      (r.players || []).forEach(id => allPlayerIds.add(id));
+      (r.reserve || []).forEach(id => allPlayerIds.add(id));
+    });
+
+    // Fetch Sleeper player data (cached)
+    setMsg('Loading player data…');
+    const allPlayers = await fetchPlayers();
+
+    // 1. Try live FantasyCalc values (direct fetch, no proxy)
+    setMsg('Fetching live dynasty values…');
+    const fcMap = await fetchFantasyCalcValues(isSF);
+    const usingFC = !!fcMap;
+    // Store globally so trade calculator can use the same source
+    S.fcMap = fcMap || null;
+    S._allPlayers = allPlayers;
+    S.isSF = isSF;
+
+    // Build a normName → sleeperId reverse lookup for FC matching
+    const nameToId = {};
+    Object.entries(allPlayers).forEach(([pid, p]) => {
+      const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim();
+      nameToId[normName(fullName)] = pid;
+    });
+
+    // 2. Fetch full-season projected points (all 18 weeks in parallel)
+    setMsg('Fetching season projections…');
+    let seasonProjPts = {};
+    try {
+      const ns = S.nflState || {};
+      const season = ns.season || new Date().getFullYear();
+      const weekResults = await Promise.all(
+        Array.from({length: 18}, (_, i) =>
+          apiFetch(`${API}/projections/nfl/regular/${season}/${i + 1}`)
+            .then(d => (d && typeof d === 'object') ? d : {})
+            .catch(() => ({}))
+        )
+      );
+      weekResults.forEach(weekData => {
+        Object.entries(weekData).forEach(([pid, pdata]) => {
+          const pts = pdata?.pts_ppr ?? pdata?.pts_half_ppr ?? pdata?.pts_std ?? 0;
+          if (pts > 0) seasonProjPts[pid] = (seasonProjPts[pid] || 0) + pts;
+        });
+      });
+    } catch(e) { /* off-season — skip */ }
+
+    // Per-position average season projection
+    const posProj = { QB:[], RB:[], WR:[], TE:[] };
+    Object.entries(seasonProjPts).forEach(([pid, pts]) => {
+      const p = allPlayers[String(pid)];
+      if (!p || !posProj[p.position]) return;
+      posProj[p.position].push(pts);
+    });
+    const posAvg = {};
+    Object.entries(posProj).forEach(([pos, arr]) => {
+      posAvg[pos] = arr.length ? arr.reduce((a,b)=>a+b,0) / arr.length : 0;
+    });
+
+    // 3. Build value map
+    setMsg('Ranking rosters…');
+    S.valueMap = {};
+    S.valueSource = usingFC ? 'FantasyCalc' : 'KTC (offline fallback)';
+
+    allPlayerIds.forEach(pid => {
+      const p = allPlayers[String(pid)];
+      if (!p) return;
+
+      const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim();
+      let value = 0;
+
+      if (usingFC) {
+        // FantasyCalc lookup by normalized name
+        value = fcMap[normName(fullName)] || 0;
+        // If not found in FC, skip (FC covers all relevant players)
+        if (value <= 0) return;
+      } else {
+        // KTC hardcoded + age formula fallback
+        value = calcDynastyScore(p, isSF);
+        if (value <= 0) return;
+      }
+
+      // Apply season projection modifier: ±up to 25%, clamped at ±35%
+      const pos = p.position;
+      const avg = posAvg[pos] || 0;
+      if (avg > 0) {
+        const seasonPts = seasonProjPts[String(pid)] || 0;
+        if (seasonPts > 0) {
+          const modifier = Math.max(-0.35, Math.min(0.35, (seasonPts / avg - 1) * 0.25));
+          value = Math.round(value * (1 + modifier));
+        }
+      }
+
+      S.valueMap[String(pid)] = {
+        value,
+        pos: p.position || '?',
+        name: fullName,
+        age: parseFloat(p.age) || null,
+        team: p.team || '',
+      };
+    });
+
+    calcAndRankTeams();
+    renderDynastyOverview();
+    S.dynastyLoaded = true;
+
+  } catch(e) {
+    document.getElementById('dynasty-loading').style.display = 'none';
+    document.getElementById('dynasty-overview').style.display = 'block';
+    document.getElementById('dynasty-overview-body').innerHTML = `<tr><td colspan="6" style="padding:40px;text-align:center;color:var(--tt);font-size:13px;">Couldn't load dynasty values.<br><br><small style="color:var(--td)">${e.message}</small></td></tr>`;
+  }
+}
+
+function calcAndRankTeams() {
+  const teams = S.rosters.map(r => {
+    const players = [...(r.players||[]), ...(r.reserve||[])];
+    let total=0, qb=0, rb=0, wr=0, te=0;
+    const byPos = { QB:[], RB:[], WR:[], TE:[], K:[], DEF:[] };
+
+    players.forEach(pid => {
+      const v = S.valueMap[String(pid)];
+      if (!v || v.value<=0) return;
+      total += v.value;
+      const pos = v.pos;
+      if (pos==='QB') qb+=v.value;
+      else if (pos==='RB') rb+=v.value;
+      else if (pos==='WR') wr+=v.value;
+      else if (pos==='TE') te+=v.value;
+      if (byPos[pos]) byPos[pos].push({...v, pid});
+      else byPos['DEF']?.push({...v, pid});
+    });
+    // Sort each position group by value desc
+    Object.values(byPos).forEach(arr => arr.sort((a,b)=>b.value-a.value));
+
+    return { roster: r, total, qb, rb, wr, te, byPos };
+  });
+
+  // Rank by total
+  teams.sort((a,b)=>b.total-a.total);
+  teams.forEach((t,i)=>t.overallRank=i+1);
+
+  // Rank by position
+  ['qb','rb','wr','te'].forEach(pos => {
+    const sorted = [...teams].sort((a,b)=>b[pos]-a[pos]);
+    sorted.forEach((t,i)=>t[pos+'Rank']=i+1);
+  });
+
+  S.teamDynasty = teams;
+}
+
+// ── Dynasty overview heat map ─────────────────────────
+function renderDynastyOverview() {
+  document.getElementById('dynasty-loading').style.display = 'none';
+  document.getElementById('dynasty-overview').style.display = 'block';
+  document.getElementById('dynasty-team').style.display = 'none';
+
+  // Show which data source was used
+  const srcNote = document.getElementById('dynasty-source-note');
+  if (srcNote) {
+    const src = S.valueSource || 'KTC (fallback)';
+    srcNote.textContent = `Values from ${src}, adjusted by Sleeper full-season projections (±35%). SF QBs weighted heavily.`;
+  }
+
+  const total = S.teamDynasty.length;
+  const tbody = document.getElementById('dynasty-overview-body');
+  tbody.innerHTML = '';
+
+  S.teamDynasty.forEach((t, i) => {
+    const r = t.roster;
+    const tr = document.createElement('tr');
+    tr.onclick = () => showTeamDetail(i);
+
+    // Team cell
+    const td = document.createElement('td');
+    const cell = document.createElement('div'); cell.className = 'dy-rank-cell';
+    const rn = document.createElement('div');
+    rn.className = 'dy-rn' + (t.overallRank<=3?` r${t.overallRank}`:'');
+    rn.textContent = t.overallRank;
+    cell.appendChild(rn);
+    cell.appendChild(mkAvatar(r._user?.avatar, 34, 'var(--r-pill)', teamName(r)));
+    const names = document.createElement('div');
+    names.innerHTML = `<div class="dy-team-name">${esc(teamName(r))}</div>${(r._user?.display_name&&r._user?.metadata?.team_name)?`<div class="dy-team-user">${esc(r._user.display_name)}</div>`:''}`;
+    cell.appendChild(names);
+    td.appendChild(cell);
+    tr.appendChild(td);
+
+    // Total value
+    const tv = document.createElement('td');
+    tv.className = 'total-val';
+    tv.textContent = fmtVal(t.total);
+    tr.appendChild(tv);
+
+    // Positional ranks
+    ['qb','rb','wr','te'].forEach(pos => {
+      const ptd = document.createElement('td');
+      ptd.style.textAlign = 'center';
+      const rank = t[pos+'Rank'];
+      const cell = document.createElement('div');
+      cell.className = 'pos-cell';
+      const { bg, color } = rankStyle(rank, total);
+      cell.style.background = bg;
+      cell.style.color = color;
+      cell.textContent = rank;
+      ptd.appendChild(cell);
+      tr.appendChild(ptd);
+    });
+
+    tbody.appendChild(tr);
+  });
+}
+
+function rankStyle(rank, total) {
+  if (!rank||!total) return { bg:'rgba(19,27,56,.5)', color:'var(--td)' };
+  const pct = (rank-1)/Math.max(total-1,1);
+  if (pct<=0.15) return { bg:'rgba(0,140,255,.80)', color:'#fff' };
+  if (pct<=0.35) return { bg:'rgba(0,140,255,.45)', color:'#BCD1EA' };
+  if (pct<=0.55) return { bg:'rgba(52,70,119,.65)', color:'#98B3D6' };
+  if (pct<=0.75) return { bg:'rgba(100,74,247,.35)', color:'#B8BFFF' };
+  return { bg:'rgba(255,100,130,.38)', color:'#FF6482' };
+}
+
+function fmtVal(v) {
+  if (v >= 1000) return `${(v/1000).toFixed(1)}k`;
+  return String(Math.round(v));
+}
+
+// ── Team detail ───────────────────────────────────────
+function showTeamDetail(idx) {
+  document.getElementById('dynasty-overview').style.display = 'none';
+  document.getElementById('dynasty-team').style.display = 'block';
+
+  const t = S.teamDynasty[idx];
+  const r = t.roster;
+  const total = S.teamDynasty.length;
+
+  // Avatar
+  const avWrap = document.getElementById('td-avatar');
+  avWrap.style.cssText = 'width:48px;height:48px;border-radius:var(--r-pill);overflow:hidden;border:1px solid var(--border);flex-shrink:0;';
+  avWrap.innerHTML = '';
+  avWrap.appendChild(mkAvatar(r._user?.avatar, 48, 'var(--r-pill)', teamName(r)));
+  // Unwrap the inner div (mkAvatar returns a wrapping div)
+  const inner = avWrap.firstChild;
+  if (inner) { inner.style.width='100%'; inner.style.height='100%'; }
+
+  document.getElementById('td-tname').textContent = teamName(r);
+  document.getElementById('td-uname').textContent = r._user?.display_name && r._user?.metadata?.team_name ? r._user.display_name : '';
+  document.getElementById('td-overall-rank').textContent = `#${t.overallRank} of ${total}`;
+
+  // Positional rank chips
+  const posRanks = document.getElementById('td-pos-ranks');
+  posRanks.innerHTML = '';
+  [['QB','qb','rgba(255,100,130,.18)','#FF9EB5'],['RB','rb','rgba(0,140,255,.18)','#7CC8FF'],['WR','wr','rgba(124,255,113,.15)','#8DFFA0'],['TE','te','rgba(201,108,255,.15)','#D88DFF']].forEach(([label,key,bg,color])=>{
+    const rank = t[key+'Rank'];
+    const chip = document.createElement('div');
+    chip.className = 'pos-rank-chip';
+    chip.style.background = bg;
+    chip.style.color = color;
+    chip.innerHTML = `<span class="pos-tag">${label}</span> <strong>#${rank}</strong> <span class="pos-tag">of ${total}</span>`;
+    posRanks.appendChild(chip);
+  });
+
+  // Radar chart
+  const maxQB = Math.max(...S.teamDynasty.map(x=>x.qb));
+  const maxRB = Math.max(...S.teamDynasty.map(x=>x.rb));
+  const maxWR = Math.max(...S.teamDynasty.map(x=>x.wr));
+  const maxTE = Math.max(...S.teamDynasty.map(x=>x.te));
+  const vals = [
+    t.qb/(maxQB||1),
+    t.rb/(maxRB||1),
+    t.wr/(maxWR||1),
+    t.te/(maxTE||1),
+  ];
+  document.getElementById('radar-svg').innerHTML = buildRadar(vals, ['QB','RB','WR','TE'], [t.qbRank,t.rbRank,t.wrRank,t.teRank]);
+
+  // Roster by position
+  renderRosterBreakdown(t, total);
+}
+
+function showDynastyOverview() {
+  document.getElementById('dynasty-team').style.display = 'none';
+  document.getElementById('dynasty-overview').style.display = 'block';
+}
+
+function buildRadar(vals, labels, ranks) {
+  const sz = 220, cx = sz/2, cy = sz/2, maxR = 78;
+  const n = vals.length;
+  const angles = vals.map((_,i)=>(i*2*Math.PI/n)-Math.PI/2);
+
+  const pts = (r) => angles.map((a,i)=>`${cx+r*Math.cos(a)},${cy+r*Math.sin(a)}`).join(' ');
+  const vpts = angles.map((a,i)=>{
+    const r = maxR*vals[i];
+    return `${cx+r*Math.cos(a)},${cy+r*Math.sin(a)}`;
+  }).join(' ');
+
+  const gridLines = [.25,.5,.75,1].map(l=>`<polygon points="${pts(maxR*l)}" fill="none" stroke="${l===1?'#25345D':'#131B38'}" stroke-width="1"/>`).join('');
+  const axisLines = angles.map(a=>`<line x1="${cx}" y1="${cy}" x2="${cx+maxR*Math.cos(a)}" y2="${cy+maxR*Math.sin(a)}" stroke="#131B38" stroke-width="1"/>`).join('');
+  const teamPoly = `<polygon points="${vpts}" fill="rgba(0,255,249,0.13)" stroke="#00FFF9" stroke-width="2" stroke-linejoin="round"/>`;
+  const dots = angles.map((a,i)=>`<circle cx="${cx+maxR*vals[i]*Math.cos(a)}" cy="${cy+maxR*vals[i]*Math.sin(a)}" r="3" fill="#00FFF9"/>`).join('');
+
+  const labelsStr = labels.map((lbl,i)=>{
+    const r2 = maxR+18, lx=cx+r2*Math.cos(angles[i]), ly=cy+r2*Math.sin(angles[i]);
+    return `<text x="${lx}" y="${ly-3}" text-anchor="middle" font-family="Google Sans Flex,Poppins,sans-serif" font-size="10" font-weight="700" fill="#5F7BA9" letter-spacing="0.5">${lbl}</text>
+            <text x="${lx}" y="${ly+10}" text-anchor="middle" font-family="Google Sans Flex,Poppins,sans-serif" font-size="11" font-weight="800" fill="#00FFF9">#${ranks[i]||'?'}</text>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${sz} ${sz}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${sz}px">
+    ${gridLines}${axisLines}${teamPoly}${dots}${labelsStr}
+  </svg>`;
+}
+
+function renderRosterBreakdown(t, leagueSize) {
+  const container = document.getElementById('td-roster');
+  container.innerHTML = '';
+
+  const posConfig = [
+    { key:'QB', label:'Quarterbacks', color:'#FF9EB5', bg:'rgba(255,100,130,.18)', rankKey:'qbRank' },
+    { key:'RB', label:'Running Backs', color:'#7CC8FF', bg:'rgba(0,140,255,.18)', rankKey:'rbRank' },
+    { key:'WR', label:'Wide Receivers', color:'#8DFFA0', bg:'rgba(124,255,113,.15)', rankKey:'wrRank' },
+    { key:'TE', label:'Tight Ends',    color:'#D88DFF', bg:'rgba(201,108,255,.15)', rankKey:'teRank' },
+  ];
+
+  // Max value across all players in this team for bar scaling
+  const allVals = Object.values(t.byPos).flat().map(p=>p.value);
+  const maxVal = Math.max(...allVals, 1);
+
+  posConfig.forEach(cfg => {
+    const players = t.byPos[cfg.key] || [];
+    if (!players.length) return;
+
+    const group = document.createElement('div');
+    group.className = 'pos-group';
+
+    const hdr = document.createElement('div');
+    hdr.className = 'pos-group-hdr';
+    hdr.innerHTML = `<span class="pos-group-title" style="color:${cfg.color}">${cfg.label}</span><span class="pos-group-rank" style="background:${cfg.bg};color:${cfg.color}">#${t[cfg.rankKey]} / ${leagueSize}</span>`;
+    group.appendChild(hdr);
+
+    players.forEach((p, pi) => {
+      const row = document.createElement('div');
+      row.className = 'player-row';
+      const barPct = Math.min(100, (p.value/maxVal)*100).toFixed(1);
+      row.innerHTML = `
+        <span class="pl-num">${pi+1}</span>
+        <span class="pl-pos-tag pos-${cfg.key}">${cfg.key}</span>
+        <div class="val-bar-wrap">
+          <span class="pl-name">${esc(p.name)}</span>
+          <div class="val-bar-bg"><div class="val-bar-fill" style="width:${barPct}%;background:${cfg.color};opacity:.6"></div></div>
+        </div>
+        <span class="pl-val">${p.value > 0 ? fmtVal(p.value) : '—'}</span>
+      `;
+      group.appendChild(row);
+    });
+
+    container.appendChild(group);
+  });
+
+  if (!container.children.length) {
+    container.innerHTML = `<div class="empty" style="padding:40px"><div class="empty-icon">📋</div><div class="empty-title">No value data</div><div class="empty-sub">Players on this roster have no dynasty values loaded.</div></div>`;
+  }
+}
+
+// ── Trade Calculator ──────────────────────────────────
+// Pick values (FantasyCalc normalized names first, hardcoded fallback)
+const PICK_DEFS = [
+  // [label, fc_name, sf_val, oneqb_val]
+  ['2026 Early 1st', '2026 early 1st',  4600, 4600],
+  ['2026 Mid 1st',   '2026 mid 1st',    3400, 3400],
+  ['2026 Late 1st',  '2026 late 1st',   2200, 2200],
+  ['2026 2nd',       '2026 early 2nd',  1600, 1600],
+  ['2026 3rd',       '2026 early 3rd',   700,  700],
+  ['2027 Early 1st', '2027 early 1st',  3800, 3800],
+  ['2027 Mid 1st',   '2027 mid 1st',    2900, 2900],
+  ['2027 Late 1st',  '2027 late 1st',   2000, 2000],
+  ['2027 2nd',       '2027 early 2nd',  1300, 1300],
+  ['2028 1st',       '2028 early 1st',  3200, 3200],
+  ['2028 2nd',       '2028 early 2nd',  1100, 1100],
+];
+
+// Trade state
+const T = { a: [], b: [], activeSide: 'a' };
+
+function pickValue(def) {
+  const isSF = (S.league?.roster_positions || []).includes('SUPER_FLEX');
+  // Try FC map first
+  if (S.fcMap) {
+    const v = S.fcMap[normName(def[1])];
+    if (v) return v;
+  }
+  return isSF ? def[2] : def[3];
+}
+
+function playerTradeValue(pid) {
+  // Use live valueMap if available (has projection modifier baked in)
+  if (S.valueMap[pid]) return S.valueMap[pid].value;
+  // Otherwise compute from FC/KTC
+  const isSF = (S.league?.roster_positions || []).includes('SUPER_FLEX');
+  if (S.fcMap) {
+    const p = S._allPlayers?.[pid];
+    if (p) {
+      const name = `${p.first_name||''} ${p.last_name||''}`.trim();
+      const v = S.fcMap[normName(name)];
+      if (v) return v;
+    }
+  }
+  const p = S._allPlayers?.[pid];
+  return p ? calcDynastyScore(p, isSF) : 0;
+}
+
+// Diminishing returns multipliers per slot (sorted best→worst).
+// Penalizes "a pile of scrubs" strategies: slot 1=100%, slot 2=90%, slot 3=80%, etc.
+const DEPTH_MULTS = [1.00, 0.90, 0.80, 0.70, 0.60, 0.52, 0.46, 0.40];
+function depthMult(i) { return DEPTH_MULTS[Math.min(i, DEPTH_MULTS.length - 1)]; }
+
+function tradeRawTotal(side) {
+  return T[side].reduce((sum, item) => sum + (item.value || 0), 0);
+}
+
+function tradeAdjTotal(side) {
+  // Sort descending so best assets get full value, depth gets discounted
+  const sorted = [...T[side]].sort((a, b) => b.value - a.value);
+  return Math.round(sorted.reduce((sum, item, i) => sum + (item.value || 0) * depthMult(i), 0));
+}
+
+function tradeTotal(side) {
+  return tradeAdjTotal(side);
+}
+
+function renderTradeCalculator() {
+  const panel = document.getElementById('tab-trade');
+  if (!panel) return;
+
+  panel.innerHTML = `
+    <div class="trade-verdict" id="trade-verdict">
+      <div class="verdict-main verdict-even" id="verdict-main">Add players to evaluate a trade</div>
+      <div class="verdict-sub" id="verdict-sub">Values powered by FantasyCalc + Sleeper projections</div>
+      <div class="verdict-bar-wrap" style="margin-top:14px">
+        <div class="verdict-fair-zone" id="verdict-fair-zone" style="width:16%;left:42%"></div>
+        <div class="verdict-bar-mid"></div>
+        <div class="verdict-bar-fill" id="verdict-bar" style="width:0%;left:50%"></div>
+      </div>
+      <div class="verdict-labels">
+        <span id="verdict-lbl-a">Side A</span>
+        <span id="verdict-lbl-b">Side B</span>
+      </div>
+    </div>
+
+    <div style="font-size:11px;color:var(--td);margin-bottom:14px;line-height:1.5;">
+      ⚠ Depth penalty applied: each additional asset is worth less than the last (2nd = 90%, 3rd = 80%, etc.), reflecting that one star beats a pile of fillers.
+    </div>
+
+    <div class="trade-layout">
+      <div class="trade-side" id="trade-side-a">
+        <div class="trade-side-hdr">⬅ Side A receives</div>
+        ${tradeSearchHTML('a')}
+        <div class="trade-items" id="trade-items-a">
+          <div class="trade-empty-hint">Search for players or add picks below</div>
+        </div>
+        ${tradePicksHTML('a')}
+        <div class="trade-total-row">
+          <div>
+            <span class="trade-total-label">Adj. Value</span>
+            <div id="trade-raw-a" style="font-size:10px;color:var(--td);margin-top:2px"></div>
+          </div>
+          <span class="trade-total-val" id="trade-total-a">—</span>
+        </div>
+      </div>
+
+      <div class="trade-vs-col">
+        <div class="trade-vs-label">VS</div>
+      </div>
+
+      <div class="trade-side" id="trade-side-b">
+        <div class="trade-side-hdr">Side B receives ➡</div>
+        ${tradeSearchHTML('b')}
+        <div class="trade-items" id="trade-items-b">
+          <div class="trade-empty-hint">Search for players or add picks below</div>
+        </div>
+        ${tradePicksHTML('b')}
+        <div class="trade-total-row">
+          <div>
+            <span class="trade-total-label">Adj. Value</span>
+            <div id="trade-raw-b" style="font-size:10px;color:var(--td);margin-top:2px"></div>
+          </div>
+          <span class="trade-total-val" id="trade-total-b">—</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Wire up search inputs
+  ['a','b'].forEach(side => {
+    const inp = document.getElementById(`trade-search-${side}`);
+    const dd = document.getElementById(`trade-dd-${side}`);
+    inp.addEventListener('input', () => tradeSearch(side));
+    inp.addEventListener('focus', () => tradeSearch(side));
+    inp.addEventListener('blur', () => setTimeout(() => { dd.classList.remove('open'); }, 180));
+    inp.addEventListener('keydown', e => { if (e.key === 'Escape') dd.classList.remove('open'); });
+  });
+}
+
+function tradeSearchHTML(side) {
+  return `
+    <div class="trade-search-wrap">
+      <input type="text" class="trade-search" id="trade-search-${side}" placeholder="Search any NFL player…" autocomplete="off" spellcheck="false"/>
+      <div class="trade-dropdown" id="trade-dd-${side}"></div>
+    </div>`;
+}
+
+function tradePicksHTML(side) {
+  const isSF = (S.league?.roster_positions || []).includes('SUPER_FLEX');
+  return `
+    <div class="pick-section">
+      <div class="pick-section-label">Add Draft Pick</div>
+      <div class="pick-grid">
+        ${PICK_DEFS.map((def, i) => `<button class="pick-btn" onclick="addPick('${side}',${i})">${def[0]}</button>`).join('')}
+      </div>
+    </div>`;
+}
+
+async function tradeSearch(side) {
+  const inp = document.getElementById(`trade-search-${side}`);
+  const dd = document.getElementById(`trade-dd-${side}`);
+  const q = inp.value.trim();
+  if (q.length < 2) { dd.classList.remove('open'); return; }
+
+  // Ensure players loaded
+  if (!S._allPlayers) {
+    S._allPlayers = await fetchPlayers().catch(() => ({}));
+  }
+
+  const qn = normName(q);
+  const isSF = (S.league?.roster_positions || []).includes('SUPER_FLEX');
+
+  // Score and filter players
+  const results = [];
+  Object.entries(S._allPlayers).forEach(([pid, p]) => {
+    const pos = p.position;
+    if (!['QB','RB','WR','TE'].includes(pos)) return;
+    const fullName = `${p.first_name||''} ${p.last_name||''}`.trim();
+    const nn = normName(fullName);
+    if (!nn.includes(qn) && !qn.split(' ').every(w => nn.includes(w))) return;
+    const value = playerTradeValue(pid);
+    if (value <= 0) return;
+    results.push({ pid, name: fullName, pos, team: p.team||'FA', value });
+  });
+
+  results.sort((a,b) => b.value - a.value);
+  const top = results.slice(0, 12);
+
+  if (!top.length) {
+    dd.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--tt);text-align:center">No players found</div>';
+    dd.classList.add('open');
+    return;
+  }
+
+  dd.innerHTML = top.map(r => `
+    <div class="trade-dd-item" onmousedown="addPlayer('${side}','${r.pid}','${r.name.replace(/'/g,"\\'")}','${r.pos}',${r.value})">
+      <span class="pl-pos-tag pos-${r.pos}" style="flex-shrink:0;font-size:10px;padding:2px 5px;border-radius:4px">${r.pos}</span>
+      <span class="trade-dd-name">${r.name}</span>
+      <span class="trade-dd-meta">${r.team}</span>
+      <span class="trade-dd-val">${r.value.toLocaleString()}</span>
+    </div>
+  `).join('');
+  dd.classList.add('open');
+}
+
+function addPlayer(side, pid, name, pos, value) {
+  const inp = document.getElementById(`trade-search-${side}`);
+  const dd = document.getElementById(`trade-dd-${side}`);
+  inp.value = '';
+  dd.classList.remove('open');
+  T[side].push({ id: `${pid}_${Date.now()}`, pid, name, pos, value, type: 'player' });
+  renderTradeItems(side);
+  updateVerdict();
+}
+
+function addPick(side, defIdx) {
+  const def = PICK_DEFS[defIdx];
+  const value = pickValue(def);
+  T[side].push({ id: `pick_${defIdx}_${Date.now()}`, name: def[0], pos: 'PICK', value, type: 'pick' });
+  renderTradeItems(side);
+  updateVerdict();
+}
+
+function removeTradeItem(side, itemId) {
+  T[side] = T[side].filter(item => String(item.id) !== String(itemId));
+  renderTradeItems(side);
+  updateVerdict();
+}
+
+function renderTradeItems(side) {
+  const container = document.getElementById(`trade-items-${side}`);
+  const totalEl = document.getElementById(`trade-total-${side}`);
+  const rawEl = document.getElementById(`trade-raw-${side}`);
+  if (!container) return;
+
+  if (!T[side].length) {
+    container.innerHTML = '<div class="trade-empty-hint">Search for players or add picks below</div>';
+    if (totalEl) totalEl.textContent = '—';
+    if (rawEl) rawEl.textContent = '';
+    return;
+  }
+
+  // Sort descending for display so we can show depth multipliers
+  const sorted = [...T[side]].sort((a, b) => b.value - a.value);
+  // Build display with depth penalty shown on each item after the first
+  container.innerHTML = sorted.map((item, i) => {
+    const mult = depthMult(i);
+    const adjVal = Math.round(item.value * mult);
+    const penaltyLabel = mult < 1 ? `<span style="font-size:10px;color:var(--td);margin-left:4px">(×${mult.toFixed(2)})</span>` : '';
+    return `
+    <div class="trade-item">
+      ${item.pos !== 'PICK'
+        ? `<span class="pl-pos-tag pos-${item.pos}" style="font-size:10px;padding:2px 5px;border-radius:4px;flex-shrink:0">${item.pos}</span>`
+        : `<span class="pl-pos-tag" style="font-size:10px;padding:2px 5px;border-radius:4px;flex-shrink:0;background:rgba(231,254,83,.1);color:var(--brand-alt)">PK</span>`
+      }
+      <span class="trade-item-name">${item.name}${penaltyLabel}</span>
+      <span class="trade-item-val" style="${mult < 1 ? 'color:var(--ts)' : ''}">${adjVal.toLocaleString()}</span>
+      <button class="trade-item-remove" onclick="removeTradeItem('${side}','${item.id}')">×</button>
+    </div>`;
+  }).join('');
+
+  const adj = tradeAdjTotal(side);
+  const raw = tradeRawTotal(side);
+  if (totalEl) totalEl.textContent = adj.toLocaleString();
+  if (rawEl) rawEl.textContent = adj !== raw ? `${raw.toLocaleString()} raw` : '';
+}
+
+function updateVerdict() {
+  const totA = tradeTotal('a');
+  const totB = tradeTotal('b');
+  const mainEl = document.getElementById('verdict-main');
+  const subEl = document.getElementById('verdict-sub');
+  const barEl = document.getElementById('verdict-bar');
+  const fzEl = document.getElementById('verdict-fair-zone');
+  const lblA = document.getElementById('verdict-lbl-a');
+  const lblB = document.getElementById('verdict-lbl-b');
+
+  lblA.textContent = `Side A: ${totA ? totA.toLocaleString() : '—'}`;
+  lblB.textContent = `Side B: ${totB ? totB.toLocaleString() : '—'}`;
+
+  if (!totA && !totB) {
+    mainEl.className = 'verdict-main verdict-even';
+    mainEl.textContent = 'Add players to evaluate a trade';
+    subEl.textContent = 'Values powered by ' + (S.valueSource || 'dynasty rankings') + ' + Sleeper projections';
+    if (barEl) { barEl.style.width = '0%'; barEl.style.left = '50%'; barEl.style.background = 'var(--brand)'; }
+    return;
+  }
+
+  const larger = Math.max(totA, totB);
+  const diff = totA - totB;
+  const absDiff = Math.abs(diff);
+  // pctOff: how far off from 50/50 as a fraction of the larger side (0 = even, 1 = one side has everything)
+  const pctOff = larger > 0 ? absDiff / larger : 0;
+
+  // ── Fair zone boundaries (% of larger side) ──────────
+  // 0–8%:  Fair trade (inside zone)
+  // 8–18%: Slight edge (touching zone edge)
+  // 18–32%: Clear advantage
+  // 32%+:  Lopsided
+  const FAIR = 0.08;
+  const SLIGHT = 0.18;
+  const CLEAR = 0.32;
+
+  // Fair zone width = 16% of bar, centered at 50%
+  const FAIR_HALF_BAR = 8; // px% on each side of center = 8% of bar width
+  if (fzEl) { fzEl.style.width = `${FAIR_HALF_BAR * 2}%`; fzEl.style.left = `${50 - FAIR_HALF_BAR}%`; }
+
+  // Bar fill: grows from center, capped at 42% (leaves room for labels)
+  const fillPct = Math.min(pctOff * 1.2 * 42, 42);
+
+  if (barEl) {
+    let color;
+    if (pctOff <= FAIR)   color = 'var(--brand)';
+    else if (pctOff <= SLIGHT) color = 'var(--brand-alt)';
+    else if (pctOff <= CLEAR)  color = 'var(--warn)';
+    else                       color = diff > 0 ? 'var(--success)' : 'var(--err)';
+
+    if (diff >= 0) {
+      barEl.style.left = `${50 - fillPct}%`;
+      barEl.style.width = `${fillPct}%`;
+    } else {
+      barEl.style.left = '50%';
+      barEl.style.width = `${fillPct}%`;
+    }
+    barEl.style.background = color;
+  }
+
+  // ── Verdict text ──────────────────────────────────────
+  const winner = diff > 0 ? 'A' : 'B';
+  const diffStr = absDiff.toLocaleString();
+  const pctStr = Math.round(pctOff * 100);
+
+  if (pctOff <= FAIR) {
+    mainEl.className = 'verdict-main verdict-even';
+    mainEl.textContent = '✅ Fair trade';
+    subEl.textContent = `Within the acceptable range — ${diffStr} difference (${pctStr}% off)`;
+  } else if (pctOff <= SLIGHT) {
+    mainEl.className = 'verdict-main verdict-even';
+    mainEl.textContent = `Slight edge to Side ${winner}`;
+    subEl.textContent = `Close enough to negotiate — ${diffStr} difference (${pctStr}% off)`;
+  } else if (pctOff <= CLEAR) {
+    mainEl.className = diff > 0 ? 'verdict-main verdict-win' : 'verdict-main verdict-lose';
+    mainEl.textContent = `Side ${winner} has a clear advantage`;
+    subEl.textContent = `Worth pushing back on — ${diffStr} difference (${pctStr}% off)`;
+  } else {
+    mainEl.className = diff > 0 ? 'verdict-main verdict-win' : 'verdict-main verdict-lose';
+    mainEl.textContent = `Lopsided — Side ${winner} wins big`;
+    subEl.textContent = `Don't do this trade — ${diffStr} difference (${pctStr}% off)`;
+  }
+}
+
+// ── Enter key ─────────────────────────────────────────
+document.getElementById('lg-input').addEventListener('keydown', e=>{ if(e.key==='Enter') loadLeague(); });
+</script>
+</body>
+</html>
