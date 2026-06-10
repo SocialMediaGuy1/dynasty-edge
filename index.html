@@ -1011,6 +1011,7 @@ async function loadDynastyValues() {
 
     calcAndRankTeams();
     renderDynastyOverview();
+    populateSuggestDropdown();
     S.dynastyLoaded = true;
 
   } catch(e) {
@@ -1362,7 +1363,6 @@ function renderTradeCalculator() {
       <div class="suggest-controls">
         <select class="suggest-select" id="suggest-team-select">
           <option value="">Select your team…</option>
-          ${S.teamDynasty.map((t,i) => `<option value="${i}">${teamName(t.roster)}</option>`).join('')}
         </select>
         <button class="suggest-btn" onclick="findSuggestedTrades()">Find Trades</button>
       </div>
@@ -1634,6 +1634,14 @@ function updateVerdict() {
 }
 
 // ── Suggested Trades ─────────────────────────────────
+function populateSuggestDropdown() {
+  const sel = document.getElementById('suggest-team-select');
+  if (!sel || !S.teamDynasty.length) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">Select your team…</option>' +
+    S.teamDynasty.map((t,i) => `<option value="${i}">${esc(teamName(t.roster))}</option>`).join('');
+  if (prev !== '') sel.value = prev;
+}
 function generateTradeSuggestions(myIdx) {
   const myTeam = S.teamDynasty[myIdx];
   const total   = S.teamDynasty.length;
