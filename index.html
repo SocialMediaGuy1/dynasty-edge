@@ -628,6 +628,7 @@ function switchTab(name, btn) {
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('tab-'+name).classList.add('active');
+  if (name === 'trade') populateSuggestDropdown();
 }
 
 function switchDynasty() {
@@ -1358,19 +1359,6 @@ function renderTradeCalculator() {
       ⚠ Depth penalty applied: each additional asset is worth less than the last (2nd = 90%, 3rd = 80%, etc.), reflecting that one star beats a pile of fillers.
     </div>
 
-    <div class="suggest-section">
-      <div class="suggest-title">💡 Suggested Trades</div>
-      <div class="suggest-controls">
-        <select class="suggest-select" id="suggest-team-select">
-          <option value="">Select your team…</option>
-        </select>
-        <button class="suggest-btn" onclick="findSuggestedTrades()">Find Trades</button>
-      </div>
-      <div id="suggest-cards" class="suggest-cards">
-        <div class="suggest-empty">Select your team and click Find Trades to see deals that could improve your roster.</div>
-      </div>
-    </div>
-
     <div class="trade-layout">
       <div class="trade-side" id="trade-side-a">
         <div class="trade-side-hdr">⬅ Side A receives</div>
@@ -1408,7 +1396,23 @@ function renderTradeCalculator() {
         </div>
       </div>
     </div>
+
+    <div class="suggest-section">
+      <div class="suggest-title">💡 Suggested Trades</div>
+      <div class="suggest-controls">
+        <select class="suggest-select" id="suggest-team-select">
+          <option value="">Select your team…</option>
+        </select>
+        <button class="suggest-btn" onclick="findSuggestedTrades()">Find Trades</button>
+      </div>
+      <div id="suggest-cards" class="suggest-cards">
+        <div class="suggest-empty">Select your team and click Find Trades to see deals that could improve your roster.</div>
+      </div>
+    </div>
   `;
+
+  // Populate team dropdown now if dynasty already loaded
+  if (S.dynastyLoaded) populateSuggestDropdown();
 
   // Wire up search inputs
   ['a','b'].forEach(side => {
