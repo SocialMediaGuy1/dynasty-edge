@@ -313,7 +313,7 @@
     .pick-btn:hover{background:rgba(0,255,249,.1);border-color:rgba(0,255,249,.3);color:var(--brand)}
 
     /* Dynasty table min-width so horizontal scroll works */
-    .dy-tbl-wrap table{min-width:520px}
+    .dy-tbl-wrap table{min-width:580px}
 
     /* Pick buttons — hidden (desktop-only feature) */
     .pick-section{display:none}
@@ -342,6 +342,20 @@
     .suggest-other-team{font-size:11px;color:var(--tt);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .suggest-empty{text-align:center;padding:36px 20px;color:var(--tt);font-size:13px;line-height:1.6}
     .suggest-empty strong{display:block;color:var(--ts);font-family:var(--fd);font-size:14px;font-weight:700;margin-bottom:6px}
+    .suggest-tab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px}
+    .suggest-tab-btn{background:none;border:none;border-bottom:2px solid transparent;padding:7px 16px;font-family:var(--fd);font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--tt);cursor:pointer;margin-bottom:-1px;transition:color .15s,border-color .15s}
+    .suggest-tab-btn.active{color:var(--brand);border-bottom-color:var(--brand)}
+    .suggest-panel{display:none}.suggest-panel.active{display:block}
+    .trade-feed{display:flex;flex-direction:column;gap:10px}
+    .trade-feed-card{background:linear-gradient(180deg,rgba(8,13,39,.9),rgba(6,10,32,.9));border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px}
+    .trade-feed-hdr{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+    .trade-feed-date{font-size:11px;color:var(--td)}
+    .trade-feed-teams{font-family:var(--fd);font-size:12px;font-weight:700;color:var(--ts);flex:1}
+    .trade-feed-sides{display:flex;gap:10px;align-items:flex-start}
+    .trade-feed-side{flex:1;min-width:0}
+    .trade-feed-side-lbl{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--td);margin-bottom:5px}
+    .trade-feed-asset{display:flex;align-items:center;gap:5px;margin-bottom:3px;font-size:12px;color:var(--tp)}
+    .trade-feed-divider{width:1px;background:var(--border);align-self:stretch;flex-shrink:0;margin:0 2px}
 
     @media(max-width:600px){
       .row{flex-direction:column}
@@ -364,7 +378,7 @@
   <div class="hero">
     <h1 class="hero-h">SLEEPER<br>DYNASTY EDGE</h1>
     <div class="hero-eye" style="margin-top:10px;margin-bottom:10px;">Powered by Sleeper</div>
-    <p class="hero-sub">Enter your Sleeper league ID to rank every dynasty roster, break down team strengths by position, and evaluate trades with live player values.</p>
+    <p class="hero-sub">Enter your Sleeper username to rank every dynasty roster, break down team strengths by position, and evaluate trades with live player values.</p>
   </div>
 
   <div class="search-card">
@@ -441,6 +455,7 @@
                 <th class="pos-header pos-rb-hdr">RB</th>
                 <th class="pos-header pos-wr-hdr">WR</th>
                 <th class="pos-header pos-te-hdr">TE</th>
+                <th class="pos-header" style="color:#FFD700">Picks</th>
               </tr>
             </thead>
             <tbody id="dynasty-overview-body"></tbody>
@@ -493,6 +508,7 @@ const S = {
   valueSource: null,
   myUserId: null,
   myRosterIdx: null,
+  tradedPicks: [],
 };
 
 // ── KTC-style dynasty values [name, SF, 1QB] ──────────
@@ -764,6 +780,11 @@ async function loadLeague(lid) {
     rosters.forEach(r => { r._user = userMap[r.owner_id]||null; S.rosterMap[r.roster_id] = r; });
     S.league = league;
     S.nflState = nflState;
+    _recentTradesLoaded = false; // reset so new league re-fetches
+    // Detect scoring format for this league
+    const rec = league.scoring_settings?.rec ?? 1;
+    S.pprFormat = rec >= 1 ? 1 : rec >= 0.5 ? 0.5 : 0;
+    S.tePremium = league.scoring_settings?.bonus_rec_te ?? 0;
     // Carry over myUserId from the username lookup (set before loadLeague was called)
     // S.myUserId is already set by findUserLeagues — don't overwrite it here
 
@@ -974,9 +995,9 @@ function calcDynastyScore(p, isSF) {
 
 // Try FantasyCalc directly from user's browser (no proxy — proxy IPs are blocked by FC).
 // Returns normalizedName → value map, or null if unavailable.
-async function fetchFantasyCalcValues(isSF) {
+async function fetchFantasyCalcValues(isSF, pprFormat = 1) {
   const numQbs = isSF ? 2 : 1;
-  const url = `https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=${numQbs}&ppr=1`;
+  const url = `https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=${numQbs}&ppr=${pprFormat}`;
   try {
     const r = await fetch(url);
     if (!r.ok) return null;
@@ -1007,6 +1028,8 @@ async function loadDynastyValues() {
 
   try {
     const isSF = (S.league?.roster_positions || []).includes('SUPER_FLEX');
+    const pprFormat = S.pprFormat ?? 1;
+    const tePremium = S.tePremium ?? 0;
 
     // Collect all player IDs across all rosters
     const allPlayerIds = new Set();
@@ -1015,13 +1038,30 @@ async function loadDynastyValues() {
       (r.reserve || []).forEach(id => allPlayerIds.add(id));
     });
 
+    // Fetch traded picks for draft capital tracking
+    setMsg('Fetching draft capital…');
+    try {
+      const tp = await apiFetch(`${API}/league/${S.league.league_id}/traded_picks`);
+      S.tradedPicks = Array.isArray(tp) ? tp : [];
+    } catch(e) { S.tradedPicks = []; }
+
     // Fetch Sleeper player data (cached)
     setMsg('Loading player data…');
     const allPlayers = await fetchPlayers();
 
     // 1. Try live FantasyCalc values (direct fetch, no proxy)
     setMsg('Fetching live dynasty values…');
-    const fcMap = await fetchFantasyCalcValues(isSF);
+    const fcMap = await fetchFantasyCalcValues(isSF, pprFormat);
+    // Apply TE premium boost if applicable
+    if (fcMap && tePremium > 0) {
+      const teboost = 1 + tePremium * 0.05;
+      Object.entries(allPlayers).forEach(([pid, p]) => {
+        if (p.position === 'TE') {
+          const key = normName(`${p.first_name||''} ${p.last_name||''}`.trim());
+          if (fcMap[key]) fcMap[key] = Math.round(fcMap[key] * teboost);
+        }
+      });
+    }
     const usingFC = !!fcMap;
     // Store globally so trade calculator can use the same source
     S.fcMap = fcMap || null;
@@ -1048,9 +1088,10 @@ async function loadDynastyValues() {
             .catch(() => ({}))
         )
       );
+      const projField = pprFormat >= 1 ? 'pts_ppr' : pprFormat >= 0.5 ? 'pts_half_ppr' : 'pts_std';
       weekResults.forEach(weekData => {
         Object.entries(weekData).forEach(([pid, pdata]) => {
-          const pts = pdata?.pts_ppr ?? pdata?.pts_half_ppr ?? pdata?.pts_std ?? 0;
+          const pts = pdata?.[projField] ?? pdata?.pts_ppr ?? pdata?.pts_half_ppr ?? pdata?.pts_std ?? 0;
           if (pts > 0) seasonProjPts[pid] = (seasonProjPts[pid] || 0) + pts;
         });
       });
@@ -1119,11 +1160,14 @@ async function loadDynastyValues() {
   } catch(e) {
     document.getElementById('dynasty-loading').style.display = 'none';
     document.getElementById('dynasty-overview').style.display = 'block';
-    document.getElementById('dynasty-overview-body').innerHTML = `<tr><td colspan="6" style="padding:40px;text-align:center;color:var(--tt);font-size:13px;">Couldn't load dynasty values.<br><br><small style="color:var(--td)">${e.message}</small></td></tr>`;
+    document.getElementById('dynasty-overview-body').innerHTML = `<tr><td colspan="7" style="padding:40px;text-align:center;color:var(--tt);font-size:13px;">Couldn't load dynasty values.<br><br><small style="color:var(--td)">${e.message}</small></td></tr>`;
   }
 }
 
 function calcAndRankTeams() {
+  // Build pick inventory for all teams
+  const pickInventory = buildPickInventory(S.rosters, S.tradedPicks, S.nflState, S.league);
+
   const teams = S.rosters.map(r => {
     // r.players already includes IR (reserve) players — don't spread r.reserve separately or they double-count
     // Use a Set to deduplicate just in case, and include taxi squad players who may not be in r.players
@@ -1146,17 +1190,23 @@ function calcAndRankTeams() {
     // Sort each position group by value desc
     Object.values(byPos).forEach(arr => arr.sort((a,b)=>b.value-a.value));
 
-    return { roster: r, total, qb, rb, wr, te, byPos };
+    // Draft capital
+    const picks = pickInventory[r.roster_id] || [];
+    const pickTotal = picks.reduce((sum, p) => sum + p.value, 0);
+    total += pickTotal;
+
+    return { roster: r, total, qb, rb, wr, te, byPos, picks, pickTotal };
   });
 
   // Rank by total
   teams.sort((a,b)=>b.total-a.total);
   teams.forEach((t,i)=>t.overallRank=i+1);
 
-  // Rank by position
-  ['qb','rb','wr','te'].forEach(pos => {
-    const sorted = [...teams].sort((a,b)=>b[pos]-a[pos]);
-    sorted.forEach((t,i)=>t[pos+'Rank']=i+1);
+  // Rank by position + picks
+  ['qb','rb','wr','te','pickTotal'].forEach(key => {
+    const sorted = [...teams].sort((a,b)=>b[key]-a[key]);
+    const rankKey = key === 'pickTotal' ? 'pickRank' : key+'Rank';
+    sorted.forEach((t,i)=>t[rankKey]=i+1);
   });
 
   S.teamDynasty = teams;
@@ -1172,7 +1222,9 @@ function renderDynastyOverview() {
   const srcNote = document.getElementById('dynasty-source-note');
   if (srcNote) {
     const src = S.valueSource || 'KTC (fallback)';
-    srcNote.textContent = `Values from ${src}, adjusted by Sleeper full-season projections (±35%). SF QBs weighted heavily.`;
+    const pprLabel = (S.pprFormat ?? 1) >= 1 ? 'Full PPR' : (S.pprFormat ?? 1) >= 0.5 ? 'Half PPR' : 'Standard';
+    const teLabel = (S.tePremium ?? 0) > 0 ? ` · TE+${S.tePremium}` : '';
+    srcNote.textContent = `Values from ${src} (${pprLabel}${teLabel}), adjusted by Sleeper projections (±35%). Total includes draft capital. SF QBs weighted heavily.`;
   }
 
   const total = S.teamDynasty.length;
@@ -1204,7 +1256,7 @@ function renderDynastyOverview() {
     tv.textContent = fmtVal(t.total);
     tr.appendChild(tv);
 
-    // Positional ranks
+    // Positional ranks + picks
     ['qb','rb','wr','te'].forEach(pos => {
       const ptd = document.createElement('td');
       ptd.style.textAlign = 'center';
@@ -1218,6 +1270,18 @@ function renderDynastyOverview() {
       ptd.appendChild(cell);
       tr.appendChild(ptd);
     });
+
+    // Picks column
+    const ptd = document.createElement('td');
+    ptd.style.textAlign = 'center';
+    const pickCell = document.createElement('div');
+    pickCell.className = 'pos-cell';
+    const { bg: pickBg, color: pickColor } = rankStyle(t.pickRank, total);
+    pickCell.style.background = pickBg;
+    pickCell.style.color = pickColor;
+    pickCell.textContent = t.pickRank;
+    ptd.appendChild(pickCell);
+    tr.appendChild(ptd);
 
     tbody.appendChild(tr);
   });
@@ -1263,8 +1327,8 @@ function showTeamDetail(idx) {
   // Positional rank chips
   const posRanks = document.getElementById('td-pos-ranks');
   posRanks.innerHTML = '';
-  [['QB','qb','rgba(255,100,130,.18)','#FF9EB5'],['RB','rb','rgba(0,140,255,.18)','#7CC8FF'],['WR','wr','rgba(124,255,113,.15)','#8DFFA0'],['TE','te','rgba(201,108,255,.15)','#D88DFF']].forEach(([label,key,bg,color])=>{
-    const rank = t[key+'Rank'];
+  [['QB','qb','rgba(255,100,130,.18)','#FF9EB5'],['RB','rb','rgba(0,140,255,.18)','#7CC8FF'],['WR','wr','rgba(124,255,113,.15)','#8DFFA0'],['TE','te','rgba(201,108,255,.15)','#D88DFF'],['Picks','pickTotal','rgba(255,215,0,.15)','#FFD700']].forEach(([label,key,bg,color])=>{
+    const rank = key === 'pickTotal' ? t.pickRank : t[key+'Rank'];
     const chip = document.createElement('div');
     chip.className = 'pos-rank-chip';
     chip.style.background = bg;
@@ -1368,6 +1432,47 @@ function renderRosterBreakdown(t, leagueSize) {
     container.appendChild(group);
   });
 
+  // Draft Capital section
+  if (t.picks && t.picks.length > 0) {
+    const group = document.createElement('div');
+    group.className = 'pos-group';
+    const hdr = document.createElement('div');
+    hdr.className = 'pos-group-hdr';
+    hdr.innerHTML = `<span class="pos-group-title" style="color:#FFD700">Draft Capital</span><span class="pos-group-rank" style="background:rgba(255,215,0,.15);color:#FFD700">#${t.pickRank} / ${leagueSize}</span>`;
+    group.appendChild(hdr);
+
+    // Only show rounds 1-3 picks by default; show all if user cares about value
+    const displayPicks = t.picks.filter(p => p.round <= 3 || p.value > 200);
+    displayPicks.forEach((p, pi) => {
+      const row = document.createElement('div');
+      row.className = 'player-row';
+      const barPct = Math.min(100, (p.value / Math.max(...t.picks.map(x=>x.value), 1)) * 100).toFixed(1);
+      const isOwn = p.fromRosterId === t.roster.roster_id;
+      const pickNote = isOwn ? '' : ` <span style="font-size:10px;color:var(--td);margin-left:4px">(via trade)</span>`;
+      row.innerHTML = `
+        <span class="pl-num">${pi+1}</span>
+        <span class="pl-pos-tag" style="background:rgba(255,215,0,.18);color:#FFD700;border-color:rgba(255,215,0,.3)">R${p.round}</span>
+        <div class="val-bar-wrap">
+          <span class="pl-name">${esc(p.label.replace(' *',''))}${pickNote}</span>
+          <div class="val-bar-bg"><div class="val-bar-fill" style="width:${barPct}%;background:#FFD700;opacity:.5"></div></div>
+        </div>
+        <span class="pl-val">${fmtVal(p.value)}</span>
+      `;
+      group.appendChild(row);
+    });
+
+    // Summary of hidden lower rounds
+    const hidden = t.picks.filter(p => p.round > 3 && p.value <= 200);
+    if (hidden.length > 0) {
+      const note = document.createElement('div');
+      note.style.cssText = 'font-size:11px;color:var(--td);padding:6px 12px 4px;';
+      note.textContent = `+ ${hidden.length} late-round pick${hidden.length>1?'s':''} (${fmtVal(hidden.reduce((s,p)=>s+p.value,0))} combined)`;
+      group.appendChild(note);
+    }
+
+    container.appendChild(group);
+  }
+
   if (!container.children.length) {
     container.innerHTML = `<div class="empty" style="padding:40px"><div class="empty-icon">📋</div><div class="empty-title">No value data</div><div class="empty-sub">Players on this roster have no dynasty values loaded.</div></div>`;
   }
@@ -1389,6 +1494,79 @@ const PICK_DEFS = [
   ['2028 1st',       '2028 early 1st',  3200, 3200],
   ['2028 2nd',       '2028 early 2nd',  1100, 1100],
 ];
+
+// ── Future pick valuation ─────────────────────────────
+// Returns dynasty value for a future draft pick (year + round).
+// Tries FantasyCalc map first (mid-round tier), falls back to a hardcoded table.
+function futurePickValue(year, round) {
+  const roundSuffix = round === 1 ? '1st' : round === 2 ? '2nd' : round === 3 ? '3rd' : `${round}th`;
+  if (S.fcMap) {
+    for (const tier of ['mid', 'early', 'late', '']) {
+      const key = normName(tier ? `${year} ${tier} ${roundSuffix}` : `${year} ${roundSuffix}`);
+      const v = S.fcMap[key];
+      if (v > 0) return v;
+    }
+  }
+  // Hardcoded fallback
+  const baseByRound = [0, 3400, 1400, 600, 280, 130];
+  const currentYear = parseInt(S.nflState?.season || new Date().getFullYear());
+  const offset = Math.max(0, Math.min(year - currentYear, 2));
+  const discount = [1.0, 0.82, 0.67][offset];
+  return Math.round((baseByRound[Math.min(round, 5)] || 100) * discount);
+}
+
+// Returns Map: roster_id → [{ year, round, value, label, fromRosterId }]
+// Accounts for traded picks — adds received picks, removes traded-away picks.
+function buildPickInventory(rosters, tradedPicks, nflState, league) {
+  const currentYear = parseInt(nflState?.season || new Date().getFullYear());
+  const rounds = Math.min(parseInt(league?.settings?.rounds || 5), 5);
+  const futureYears = [currentYear, currentYear + 1, currentYear + 2];
+
+  // Which own picks have been traded away: "year_round_originalOwner"
+  const tradedAwaySet = new Set();
+  // Picks received from others: roster_id → [{year, round, fromRosterId}]
+  const receivedMap = {};
+  tradedPicks.forEach(tp => {
+    const yr = parseInt(tp.season);
+    if (!futureYears.includes(yr)) return;
+    const key = `${yr}_${tp.round}_${tp.owner_id}`;
+    tradedAwaySet.add(key); // original owner no longer holds this pick
+    const curr = tp.roster_id;
+    if (!receivedMap[curr]) receivedMap[curr] = [];
+    receivedMap[curr].push({ year: yr, round: tp.round, fromRosterId: tp.owner_id });
+  });
+
+  const inventory = {};
+  rosters.forEach(r => {
+    const rid = r.roster_id;
+    const picks = [];
+    // Own picks that haven't been traded away
+    futureYears.forEach(yr => {
+      for (let rnd = 1; rnd <= rounds; rnd++) {
+        if (!tradedAwaySet.has(`${yr}_${rnd}_${rid}`)) {
+          picks.push({ year: yr, round: rnd, fromRosterId: rid });
+        }
+      }
+    });
+    // Received picks from others
+    (receivedMap[rid] || []).forEach(p => picks.push(p));
+    // Deduplicate (a pick can't appear twice), sort by year then round
+    const seen = new Set();
+    const deduped = picks.filter(p => {
+      const k = `${p.year}_${p.round}_${p.fromRosterId}`;
+      if (seen.has(k)) return false;
+      seen.add(k); return true;
+    });
+    deduped.sort((a, b) => a.year !== b.year ? a.year - b.year : a.round - b.round);
+    // Attach value and label
+    inventory[rid] = deduped.map(p => {
+      const roundLabel = p.round === 1 ? '1st' : p.round === 2 ? '2nd' : p.round === 3 ? '3rd' : `${p.round}th`;
+      const ownLabel = p.fromRosterId === rid ? '' : ' *';
+      return { ...p, value: futurePickValue(p.year, p.round), label: `${p.year} ${roundLabel}${ownLabel}` };
+    });
+  });
+  return inventory;
+}
 
 // Trade state
 const T = { a: [], b: [], activeSide: 'a' };
@@ -1501,9 +1679,23 @@ function renderTradeCalculator() {
     </div>
 
     <div class="suggest-section">
-      <div class="suggest-title">💡 Suggested Trades for Your Team</div>
-      <div id="suggest-cards" class="suggest-cards">
-        <div class="suggest-empty">Loading dynasty values — suggestions will appear shortly.</div>
+      <div class="suggest-tab-bar">
+        <button class="suggest-tab-btn active" id="stab-suggested" onclick="switchSuggestTab('suggested')">💡 Suggested</button>
+        <button class="suggest-tab-btn" id="stab-recent" onclick="switchSuggestTab('recent')">📋 League Trades</button>
+      </div>
+      <div class="suggest-panel active" id="spanel-suggested">
+        <div id="suggest-cards" class="suggest-cards">
+          <div class="suggest-empty">Loading dynasty values — suggestions will appear shortly.</div>
+        </div>
+      </div>
+      <div class="suggest-panel" id="spanel-recent">
+        <div style="margin-bottom:12px">
+          <input type="text" id="trade-feed-search" class="txt" placeholder="Search by player name…" autocomplete="off" spellcheck="false" oninput="filterTradeFeed()" style="width:100%;box-sizing:border-box"/>
+        </div>
+        <div id="trade-feed-count" style="font-size:11px;color:var(--td);margin-bottom:10px;display:none"></div>
+        <div id="trade-feed" class="trade-feed">
+          <div class="suggest-empty">Select a league to see recent trades.</div>
+        </div>
       </div>
     </div>
   `;
@@ -1746,15 +1938,22 @@ function populateSuggestDropdown() {
 }
 function generateTradeSuggestions(myIdx) {
   const myTeam = S.teamDynasty[myIdx];
-  const total   = S.teamDynasty.length;
+  const total  = S.teamDynasty.length;
 
-  // Map positions to their ranks on my team
   const posRanks = { QB: myTeam.qbRank, RB: myTeam.rbRank, WR: myTeam.wrRank, TE: myTeam.teRank };
+  const allPos   = ['QB','RB','WR','TE'].sort((a,b) => posRanks[b] - posRanks[a]);
+  const weakPos  = allPos.slice(0, 2);
+  const strongPos = allPos.slice(2);
 
-  // Sort positions weakest → strongest (higher rank number = weaker)
-  const allPos     = ['QB','RB','WR','TE'].sort((a,b) => posRanks[b] - posRanks[a]);
-  const weakPos    = allPos.slice(0, 2);   // my 2 weakest positions
-  const strongPos  = allPos.slice(2);       // my 2 strongest positions
+  // My single most valuable player — protect from all suggestions
+  const myTopPlayer = ['QB','RB','WR','TE']
+    .flatMap(p => myTeam.byPos[p] || [])
+    .sort((a,b) => b.value - a.value)[0];
+
+  // My most valuable future pick available to use as a sweetener
+  const myBestPick = (myTeam.picks || [])
+    .filter(p => p.value > 400)
+    .sort((a,b) => b.value - a.value)[0] || null;
 
   const suggestions = [];
 
@@ -1762,74 +1961,347 @@ function generateTradeSuggestions(myIdx) {
     if (idx === myIdx) return;
 
     weakPos.forEach(needPos => {
-      // Their players at my weak position that have real value
-      const theirCandidates = (otherTeam.byPos[needPos] || []).filter(p => p.value > 500);
+      const isCriticalNeed = posRanks[needPos] > total * 0.65;
 
-      // Players I could offer: depth at any position (not my #1 overall pick)
-      const myAllPlayers = ['QB','RB','WR','TE']
+      // Their players at my weak position with real value
+      const theirCands = (otherTeam.byPos[needPos] || []).filter(p => p.value > 500).slice(0, 4);
+
+      // Players I can trade: depth at strong positions; non-starters at weak positions
+      const myTradeables = ['QB','RB','WR','TE']
         .flatMap(pos => {
           const arr = myTeam.byPos[pos] || [];
-          // Don't trade away my best player at a position I need
           return weakPos.includes(pos) ? arr.slice(1) : arr;
         })
-        .filter(p => p.value > 300);
+        .filter(p => p.value > 300 && (!myTopPlayer || p.pid !== myTopPlayer.pid));
 
-      theirCandidates.slice(0, 4).forEach(theirPlayer => {
-        myAllPlayers.forEach(myPlayer => {
+      theirCands.forEach(theirPlayer => {
+
+        // ── TYPE 1: Straight 1-for-1 swap ──────────────────────────
+        myTradeables.forEach(myPlayer => {
           if (myPlayer.pid === theirPlayer.pid) return;
-
-          const iGet  = theirPlayer.value;
-          const iGive = myPlayer.value;
-          if (!iGet || !iGive) return;
-
-          const netGain = iGet - iGive;
-          const pctAdv  = netGain / Math.max(iGet, iGive);
-
-          // Accept trades:
-          //   • 0–20% in my favor (slightly to moderately winning)
-          //   • Even trades (±5%) that fill a critical need (bottom 35% of league)
-          const isCriticalNeed = posRanks[needPos] > total * 0.65;
-          const isSlightlyGood = pctAdv >= 0 && pctAdv <= 0.20;
-          const isEvenNeedFill = isCriticalNeed && pctAdv >= -0.05 && pctAdv < 0;
-
-          if (!isSlightlyGood && !isEvenNeedFill) return;
-
-          // Don't suggest trading away my best overall player (top 1 by value across positions)
-          const myTopPlayer = ['QB','RB','WR','TE']
-            .flatMap(p => myTeam.byPos[p] || [])
-            .sort((a,b) => b.value - a.value)[0];
-          if (myTopPlayer && myPlayer.pid === myTopPlayer.pid) return;
-
+          const giveTotal = myPlayer.value, getTotal = theirPlayer.value;
+          const netGain = getTotal - giveTotal;
+          const pctAdv  = netGain / Math.max(getTotal, giveTotal);
+          const isOk = (pctAdv >= 0 && pctAdv <= 0.22) ||
+                       (isCriticalNeed && pctAdv >= -0.05 && pctAdv < 0);
+          if (!isOk) return;
           suggestions.push({
-            iGive: myPlayer,
-            iGet: theirPlayer,
-            otherTeam,
-            otherIdx: idx,
-            netGain,
-            pctAdv,
-            needPos,
-            isNeedFill: isCriticalNeed,
+            give: [myPlayer], get: [theirPlayer],
+            givePicks: [], getPicks: [],
+            giveTotal, getTotal, netGain, pctAdv,
+            otherTeam, otherIdx: idx,
+            needPos, isNeedFill: isCriticalNeed, tradeType: '1v1',
           });
         });
+
+        // ── TYPE 2: Player + Pick to sweeten a deal ─────────────────
+        if (myBestPick) {
+          myTradeables.forEach(myPlayer => {
+            if (myPlayer.pid === theirPlayer.pid) return;
+            // Only add pick when the 1v1 alone doesn't work (player is undervalued)
+            const straight = (theirPlayer.value - myPlayer.value) / Math.max(theirPlayer.value, myPlayer.value);
+            if (straight >= 0) return; // 1v1 already fine, no need to add pick
+            const giveTotal = myPlayer.value + myBestPick.value;
+            const getTotal  = theirPlayer.value;
+            const netGain   = getTotal - giveTotal;
+            const pctAdv    = netGain / Math.max(getTotal, giveTotal);
+            const isOk = (pctAdv >= -0.10 && pctAdv <= 0.12) ||
+                         (isCriticalNeed && pctAdv >= -0.14);
+            if (!isOk) return;
+            suggestions.push({
+              give: [myPlayer], get: [theirPlayer],
+              givePicks: [myBestPick], getPicks: [],
+              giveTotal, getTotal, netGain, pctAdv,
+              otherTeam, otherIdx: idx,
+              needPos, isNeedFill: isCriticalNeed, tradeType: 'player+pick',
+            });
+          });
+        }
+
+        // ── TYPE 3: 2-for-1 consolidation ──────────────────────────
+        // Give 2 depth pieces → get 1 upgrade at weak position
+        const depth = myTradeables.slice(0, 6);
+        for (let i = 0; i < depth.length; i++) {
+          for (let j = i + 1; j < depth.length; j++) {
+            const p1 = depth[i], p2 = depth[j];
+            if (p1.pid === theirPlayer.pid || p2.pid === theirPlayer.pid) continue;
+            const giveTotal = p1.value + p2.value;
+            const getTotal  = theirPlayer.value;
+            if (giveTotal < getTotal * 0.72 || giveTotal > getTotal * 1.40) continue;
+            const netGain = getTotal - giveTotal;
+            const pctAdv  = netGain / Math.max(getTotal, giveTotal);
+            const isOk = (pctAdv >= -0.12 && pctAdv <= 0.25) ||
+                         (isCriticalNeed && pctAdv >= -0.16);
+            if (!isOk) continue;
+            suggestions.push({
+              give: [p1, p2], get: [theirPlayer],
+              givePicks: [], getPicks: [],
+              giveTotal, getTotal, netGain, pctAdv,
+              otherTeam, otherIdx: idx,
+              needPos, isNeedFill: isCriticalNeed, tradeType: '2v1',
+            });
+          }
+        }
+      });
+
+      // ── TYPE 4: 1-for-2 sell high ───────────────────────────────
+      // Give 1 strong player → get 2 at my weak position (quantity + need fill)
+      const myStars = strongPos
+        .flatMap(pos => (myTeam.byPos[pos] || []).slice(0, 3))
+        .filter(p => p.value > 1000 && (!myTopPlayer || p.pid !== myTopPlayer.pid));
+
+      const theirAtNeed = (otherTeam.byPos[needPos] || []).filter(p => p.value > 300);
+      myStars.forEach(myPlayer => {
+        for (let i = 0; i < Math.min(theirAtNeed.length, 5); i++) {
+          for (let j = i + 1; j < Math.min(theirAtNeed.length, 6); j++) {
+            const tp1 = theirAtNeed[i], tp2 = theirAtNeed[j];
+            const giveTotal = myPlayer.value;
+            const getTotal  = tp1.value + tp2.value;
+            if (getTotal < giveTotal * 0.72 || getTotal > giveTotal * 1.30) continue;
+            const netGain = getTotal - giveTotal;
+            const pctAdv  = netGain / Math.max(getTotal, giveTotal);
+            const isOk = pctAdv >= -0.08 && pctAdv <= 0.22;
+            if (!isOk) continue;
+            suggestions.push({
+              give: [myPlayer], get: [tp1, tp2],
+              givePicks: [], getPicks: [],
+              giveTotal, getTotal, netGain, pctAdv,
+              otherTeam, otherIdx: idx,
+              needPos, isNeedFill: isCriticalNeed, tradeType: '1v2',
+            });
+          }
+        }
       });
     });
   });
 
-  // Deduplicate by player pair, sort by net gain desc, cap at 8
+  // Deduplicate by asset fingerprint
   const seen = new Set();
-  return suggestions
-    .filter(s => {
-      const key = `${s.iGive.pid}_${s.iGet.pid}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => {
-      // Priority: need-fills first, then by net gain
-      if (a.isNeedFill !== b.isNeedFill) return a.isNeedFill ? -1 : 1;
-      return b.netGain - a.netGain;
-    })
-    .slice(0, 8);
+  const deduped = suggestions.filter(s => {
+    const gk = [...s.give.map(p=>p.pid), ...s.givePicks.map(p=>p.label)].sort().join('|');
+    const rk = [...s.get.map(p=>p.pid), ...s.getPicks.map(p=>p.label)].sort().join('|');
+    const key = `${gk}__${rk}`;
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+
+  // Sort: critical need-fills first, then best net gain
+  deduped.sort((a,b) => {
+    if (a.isNeedFill !== b.isNeedFill) return a.isNeedFill ? -1 : 1;
+    return b.netGain - a.netGain;
+  });
+
+  // Enforce variety: cap each type so you don't get 8 identical 1v1s
+  const caps = { '1v1': 3, '2v1': 2, '1v2': 2, 'player+pick': 2 };
+  const typeCounts = {};
+  const result = [];
+  for (const s of deduped) {
+    const c = typeCounts[s.tradeType] || 0;
+    const max = caps[s.tradeType] || 2;
+    if (c < max) { typeCounts[s.tradeType] = c + 1; result.push(s); }
+    if (result.length >= 8) break;
+  }
+  // Fill any remaining slots if we came up short
+  for (const s of deduped) {
+    if (result.length >= 8) break;
+    if (!result.includes(s)) result.push(s);
+  }
+  return result;
+}
+
+// ── Suggest section tab switcher ─────────────────────
+function switchSuggestTab(tab) {
+  ['suggested','recent'].forEach(t => {
+    document.getElementById(`stab-${t}`)?.classList.toggle('active', t === tab);
+    document.getElementById(`spanel-${t}`)?.classList.toggle('active', t === tab);
+  });
+  if (tab === 'recent') loadRecentTrades();
+}
+
+// ── Real league trades from Sleeper API ──────────────
+let _recentTradesLoaded = false;
+S._allTrades = [];
+
+async function loadRecentTrades() {
+  const container = document.getElementById('trade-feed');
+  if (!container) return;
+  if (!S.league) {
+    container.innerHTML = '<div class="suggest-empty">Load a league first.</div>';
+    return;
+  }
+  if (_recentTradesLoaded) return; // already fetched — just re-filter
+
+  container.innerHTML = '<div class="suggest-empty">Loading trades…</div>';
+
+  try {
+    const lid = S.league.league_id;
+    const currentWeek = S.nflState?.week || 18;
+    // Fetch round 0 (offseason) + all 18 possible in-season rounds in parallel
+    const rounds = Array.from({ length: 20 }, (_, i) => i); // 0–19
+    const results = await Promise.all(
+      rounds.map(r => apiFetch(`${API}/league/${lid}/transactions/${r}`).catch(() => []))
+    );
+
+    // Flatten, keep only completed trades, sort newest first — store ALL (no cap)
+    S._allTrades = results
+      .flat()
+      .filter(t => t.type === 'trade' && t.status === 'complete')
+      .sort((a, b) => (b.status_updated_at || 0) - (a.status_updated_at || 0));
+
+    _recentTradesLoaded = true;
+    filterTradeFeed(); // initial render
+  } catch(e) {
+    container.innerHTML = `<div class="suggest-empty">Couldn't load trades: ${e.message}</div>`;
+  }
+}
+
+function filterTradeFeed() {
+  const container = document.getElementById('trade-feed');
+  const countEl   = document.getElementById('trade-feed-count');
+  if (!container) return;
+
+  const raw   = document.getElementById('trade-feed-search')?.value || '';
+  const query = normName(raw);
+  const allPlayers = S._allPlayers || {};
+
+  let trades;
+  if (!query) {
+    trades = S._allTrades.slice(0, 25); // no search: 25 most recent
+    if (countEl) countEl.style.display = 'none';
+  } else {
+    trades = S._allTrades.filter(tx => {
+      const pids = [...Object.keys(tx.adds || {}), ...Object.keys(tx.drops || {})];
+      return pids.some(pid => {
+        const p = allPlayers[pid];
+        if (!p) return false;
+        const name = normName(`${p.first_name||''} ${p.last_name||''}`.trim());
+        return name.includes(query);
+      });
+    });
+    if (countEl) {
+      countEl.textContent = trades.length
+        ? `${trades.length} trade${trades.length !== 1 ? 's' : ''} involving "${raw}"`
+        : '';
+      countEl.style.display = trades.length ? 'block' : 'none';
+    }
+  }
+
+  renderRecentTrades(trades, container, raw);
+}
+
+function renderRecentTrades(trades, container, query = '') {
+  if (!trades.length) {
+    const msg = query
+      ? `<strong>No trades found</strong>No trades in this league involved "${esc(query)}".`
+      : 'No completed trades found in this league yet.';
+    container.innerHTML = `<div class="suggest-empty">${msg}</div>`;
+    return;
+  }
+
+  const allPlayers = S._allPlayers || {};
+  const rosterMap  = S.rosterMap  || {};
+
+  function getPlayerName(pid) {
+    const p = allPlayers[String(pid)];
+    if (!p) return `Player #${pid}`;
+    return `${p.first_name || ''} ${p.last_name || ''}`.trim();
+  }
+  function getPlayerPos(pid) {
+    return allPlayers[String(pid)]?.position || '';
+  }
+  function getRosterName(rid) {
+    const r = rosterMap[rid];
+    if (!r) return `Team ${rid}`;
+    return teamName(r);
+  }
+  function fmtDate(ms) {
+    if (!ms) return '';
+    const d = new Date(ms);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  const POS_COLORS = {
+    QB:'#FF9EB5', RB:'#7CC8FF', WR:'#8DFFA0', TE:'#D88DFF',
+    K:'#FFC97A', DEF:'#A0C4FF',
+  };
+
+  container.innerHTML = trades.map(tx => {
+    const rids = tx.roster_ids || [];
+    const adds  = tx.adds  || {};
+    const drops = tx.drops || {};
+    const picks = tx.draft_picks || [];
+
+    // Build per-roster: { received: [{pid, pos, name}], gave: [{pid, pos, name}], picksIn: [], picksOut: [] }
+    const sides = {};
+    rids.forEach(rid => { sides[rid] = { received: [], gave: [], picksIn: [], picksOut: [] }; });
+
+    // Player movements
+    Object.entries(adds).forEach(([pid, toRid]) => {
+      if (sides[toRid]) {
+        const fromRid = drops[pid]; // who gave it up
+        sides[toRid].received.push({ pid, pos: getPlayerPos(pid), name: getPlayerName(pid) });
+      }
+    });
+    Object.entries(drops).forEach(([pid, fromRid]) => {
+      if (sides[fromRid]) {
+        sides[fromRid].gave.push({ pid, pos: getPlayerPos(pid), name: getPlayerName(pid) });
+      }
+    });
+
+    // Pick movements: roster_id = new owner, previous_owner_id = who gave it up in THIS trade
+    picks.forEach(pk => {
+      const newOwner  = pk.roster_id;
+      const prevOwner = pk.previous_owner_id;
+      const originalSlot = pk.owner_id;
+      const roundLabel = pk.round === 1 ? '1st' : pk.round === 2 ? '2nd' : pk.round === 3 ? '3rd' : `${pk.round}th`;
+      const slotTeam = originalSlot !== newOwner && originalSlot !== prevOwner
+        ? ` (${getRosterName(originalSlot)})` : '';
+      const label = `${pk.season} ${roundLabel}${slotTeam}`;
+      if (sides[newOwner])  sides[newOwner].picksIn.push(label);
+      if (sides[prevOwner]) sides[prevOwner].picksOut.push(label);
+    });
+
+    function assetHTML(players, picks, isPick) {
+      const searchQuery = normName(query);
+    let html = '';
+      players.forEach(p => {
+        const isMatch = searchQuery && normName(p.name).includes(searchQuery);
+        const nameHtml = isMatch
+          ? `<span style="color:var(--brand);font-weight:700">${esc(p.name)}</span>`
+          : esc(p.name);
+        html += `<div class="trade-feed-asset">
+          <span class="pl-pos-tag pos-${p.pos}" style="font-size:9px;padding:1px 4px;border-radius:3px">${p.pos||'?'}</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nameHtml}</span>
+        </div>`;
+      });
+      picks.forEach(lbl => {
+        html += `<div class="trade-feed-asset">
+          <span class="pl-pos-tag" style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(255,215,0,.18);color:#FFD700;border-color:rgba(255,215,0,.3)">PICK</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tt)">${esc(lbl)}</span>
+        </div>`;
+      });
+      return html || `<div class="trade-feed-asset" style="color:var(--td)">—</div>`;
+    }
+
+    const sidesHTML = rids.map((rid, i) => {
+      const s = sides[rid] || { received: [], gave: [], picksIn: [], picksOut: [] };
+      return `
+        ${i > 0 ? '<div class="trade-feed-divider"></div>' : ''}
+        <div class="trade-feed-side">
+          <div class="trade-feed-side-lbl" style="color:var(--brand)">${esc(getRosterName(rid))} receives</div>
+          ${assetHTML(s.received, s.picksIn)}
+        </div>`;
+    }).join('');
+
+    return `
+    <div class="trade-feed-card">
+      <div class="trade-feed-hdr">
+        <span class="trade-feed-teams">${rids.map(getRosterName).map(esc).join(' ↔ ')}</span>
+        <span class="trade-feed-date">${fmtDate(tx.status_updated_at)}</span>
+      </div>
+      <div class="trade-feed-sides">${sidesHTML}</div>
+    </div>`;
+  }).join('');
 }
 
 function findSuggestedTrades() {
@@ -1864,38 +2336,59 @@ function findSuggestedTrades() {
     TE: { bg:'rgba(201,108,255,.12)', color:'#D88DFF' },
   };
 
+  const TYPE_LABELS = {
+    '1v1': '', '2v1': 'Package Deal', '1v2': 'Sell High', 'player+pick': 'Add Pick',
+  };
+
+  function renderAssets(players, picks) {
+    let html = '';
+    players.forEach((p, i) => {
+      const pc2 = POS_COLORS[p.pos] || { bg:'rgba(52,70,119,.5)', color:'var(--ts)' };
+      html += `<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+        ${i > 0 ? `<span style="color:var(--td);font-size:11px;width:12px;flex-shrink:0">+</span>` : `<span style="width:12px;flex-shrink:0"></span>`}
+        <span class="pl-pos-tag pos-${p.pos}" style="font-size:10px;padding:2px 5px;border-radius:4px">${p.pos}</span>
+        <span class="suggest-player-name">${esc(p.name)}</span>
+      </div>`;
+    });
+    picks.forEach(pk => {
+      html += `<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+        <span style="color:var(--td);font-size:11px;width:12px;flex-shrink:0">+</span>
+        <span class="pl-pos-tag" style="font-size:10px;padding:2px 5px;border-radius:4px;background:rgba(255,215,0,.18);color:#FFD700;border-color:rgba(255,215,0,.3)">PICK</span>
+        <span class="suggest-player-name">${esc(pk.label)}</span>
+      </div>`;
+    });
+    return html;
+  }
+
   container.innerHTML = suggestions.map((s, i) => {
-    const pc    = POS_COLORS[s.needPos] || { bg:'rgba(52,70,119,.5)', color:'var(--ts)' };
-    const gain  = Math.round(s.netGain);
-    const pct   = Math.round(Math.abs(s.pctAdv) * 100);
+    const pc       = POS_COLORS[s.needPos] || { bg:'rgba(52,70,119,.5)', color:'var(--ts)' };
+    const gain     = Math.round(s.netGain);
+    const pct      = Math.round(Math.abs(s.pctAdv) * 100);
     const gainLabel = gain > 0
       ? `<span class="suggest-gain" style="color:var(--success)">+${gain.toLocaleString()} (${pct}% edge)</span>`
-      : `<span class="suggest-gain" style="color:var(--brand)">Even trade — fills need</span>`;
-
-    const iGivePos = POS_COLORS[s.iGive.pos] || { bg:'rgba(52,70,119,.5)', color:'var(--ts)' };
+      : `<span class="suggest-gain" style="color:var(--brand)">Even — fills need</span>`;
+    const typeLabel = TYPE_LABELS[s.tradeType];
+    const typeBadge = typeLabel
+      ? `<span style="background:rgba(52,70,119,.7);color:var(--ts);font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px">${typeLabel}</span>`
+      : '';
 
     return `
     <div class="suggest-card">
       <div class="suggest-card-top">
         <span class="suggest-need-badge" style="background:${pc.bg};color:${pc.color}">NEED ${s.needPos}</span>
         <span class="suggest-other-team">vs ${esc(teamName(s.otherTeam.roster))}</span>
+        ${typeBadge}
         ${gainLabel}
       </div>
       <div class="suggest-vs-row">
         <div class="suggest-player-block">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-            <span class="pl-pos-tag pos-${s.iGive.pos}" style="font-size:10px;padding:2px 5px;border-radius:4px">${s.iGive.pos}</span>
-            <span class="suggest-player-name">${esc(s.iGive.name)}</span>
-          </div>
-          <div class="suggest-player-meta">You give · ${s.iGive.value.toLocaleString()}</div>
+          ${renderAssets(s.give, s.givePicks)}
+          <div class="suggest-player-meta" style="margin-top:4px">You give · ${s.giveTotal.toLocaleString()}</div>
         </div>
         <div class="suggest-arrow">→</div>
         <div class="suggest-player-block">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-            <span class="pl-pos-tag pos-${s.needPos}" style="font-size:10px;padding:2px 5px;border-radius:4px">${s.needPos}</span>
-            <span class="suggest-player-name">${esc(s.iGet.name)}</span>
-          </div>
-          <div class="suggest-player-meta">You get · ${s.iGet.value.toLocaleString()}</div>
+          ${renderAssets(s.get, s.getPicks)}
+          <div class="suggest-player-meta" style="margin-top:4px">You get · ${s.getTotal.toLocaleString()}</div>
         </div>
         <button class="suggest-load-btn" onclick="loadSuggestionIntoCalc(${i})">Load →</button>
       </div>
@@ -1910,35 +2403,29 @@ function loadSuggestionIntoCalc(idx) {
   const s = window._lastSuggestions?.[idx];
   if (!s) return;
 
-  // Clear both sides
   T.a = [];
   T.b = [];
 
   // Side A = what YOU give up
-  T.a.push({
-    id: `${s.iGive.pid}_${Date.now()}`,
-    pid: s.iGive.pid,
-    name: s.iGive.name,
-    pos: s.iGive.pos,
-    value: s.iGive.value,
-    type: 'player',
+  s.give.forEach((p, i) => {
+    T.a.push({ id: `${p.pid}_give_${Date.now()+i}`, pid: p.pid, name: p.name, pos: p.pos, value: p.value, type: 'player' });
+  });
+  s.givePicks.forEach((pk, i) => {
+    T.a.push({ id: `pick_give_${i}_${Date.now()}`, name: pk.label, value: pk.value, type: 'pick' });
   });
 
   // Side B = what YOU get back
-  T.b.push({
-    id: `${s.iGet.pid}_${Date.now()+1}`,
-    pid: s.iGet.pid,
-    name: s.iGet.name,
-    pos: s.iGet.pos || s.needPos,
-    value: s.iGet.value,
-    type: 'player',
+  s.get.forEach((p, i) => {
+    T.b.push({ id: `${p.pid}_get_${Date.now()+100+i}`, pid: p.pid, name: p.name, pos: p.pos || s.needPos, value: p.value, type: 'player' });
+  });
+  s.getPicks.forEach((pk, i) => {
+    T.b.push({ id: `pick_get_${i}_${Date.now()}`, name: pk.label, value: pk.value, type: 'pick' });
   });
 
   renderTradeItems('a');
   renderTradeItems('b');
   updateVerdict();
 
-  // Scroll to trade calculator
   document.getElementById('trade-verdict')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
