@@ -362,6 +362,9 @@
       .btn{width:100%}
       .hero-h{font-size:34px;line-height:38px}
       .hide-sm{display:none}
+      /* Larger username input on mobile — 16px prevents iOS auto-zoom */
+      input.txt{height:52px;font-size:16px;padding:0 16px}
+      .field-label{font-size:13px}
       /* Sticky verdict bar on mobile */
       .trade-verdict{position:sticky;top:58px;z-index:15;margin-left:-16px;margin-right:-16px;border-radius:0;border-left:none;border-right:none}
     }
@@ -509,6 +512,7 @@ const S = {
   myUserId: null,
   myRosterIdx: null,
   tradedPicks: [],
+  _allTrades: [],
 };
 
 // ── KTC-style dynasty values [name, SF, 1QB] ──────────
@@ -781,6 +785,7 @@ async function loadLeague(lid) {
     S.league = league;
     S.nflState = nflState;
     _recentTradesLoaded = false; // reset so new league re-fetches
+    S._allTrades = [];
     // Detect scoring format for this league
     const rec = league.scoring_settings?.rec ?? 1;
     S.pprFormat = rec >= 1 ? 1 : rec >= 0.5 ? 0.5 : 0;
@@ -795,6 +800,11 @@ async function loadLeague(lid) {
 
     document.getElementById('league-loading').style.display = 'none';
     document.getElementById('league-content').style.display = 'block';
+
+    // Scroll to the newly revealed content (especially useful on mobile)
+    setTimeout(() => {
+      document.getElementById('league-content').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
 
     // Reset dynasty tab and auto-load dynasty values
     document.getElementById('dynasty-overview').style.display = 'none';
@@ -2120,7 +2130,6 @@ function switchSuggestTab(tab) {
 
 // ── Real league trades from Sleeper API ──────────────
 let _recentTradesLoaded = false;
-S._allTrades = [];
 
 async function loadRecentTrades() {
   const container = document.getElementById('trade-feed');
@@ -2129,7 +2138,7 @@ async function loadRecentTrades() {
     container.innerHTML = '<div class="suggest-empty">Load a league first.</div>';
     return;
   }
-  if (_recentTradesLoaded) return; // already fetched — just re-filter
+  if (_recentTradesLoaded) { filterTradeFeed(); return; } // re-render from cache
 
   container.innerHTML = '<div class="suggest-empty">Loading trades…</div>';
 
