@@ -156,7 +156,7 @@
     .dynasty-skel-row{height:48px;border-radius:var(--r-md);}
 
     /* Dynasty overview table */
-    .dy-tbl-wrap{background:linear-gradient(180deg,rgba(8,13,39,.85) 0%,rgba(6,10,32,.85) 100%);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;box-shadow:var(--shadow)}
+    .dy-tbl-wrap{background:linear-gradient(180deg,rgba(8,13,39,.85) 0%,rgba(6,10,32,.85) 100%);border:1px solid var(--border);border-radius:var(--r-md);overflow-x:auto;overflow-y:hidden;box-shadow:var(--shadow);-webkit-overflow-scrolling:touch}
     .dy-tbl-wrap table thead th{padding:10px 14px}
     .dy-tbl-wrap table tbody td{padding:10px 14px}
     .dy-tbl-wrap tbody tr{cursor:pointer}
@@ -300,11 +300,44 @@
     .pick-btn{background:rgba(19,27,56,.8);border:1px solid var(--border);border-radius:var(--r-pill);color:var(--ts);font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:.3px;padding:4px 10px;cursor:pointer;transition:background .1s,border-color .1s,color .1s}
     .pick-btn:hover{background:rgba(0,255,249,.1);border-color:rgba(0,255,249,.3);color:var(--brand)}
 
+    /* Dynasty table min-width so horizontal scroll works */
+    .dy-tbl-wrap table{min-width:520px}
+
+    /* Pick buttons — hidden (desktop-only feature) */
+    .pick-section{display:none}
+
+    /* ─── Suggested Trades ─── */
+    .suggest-section{margin-top:28px;border-top:1px solid var(--border);padding-top:22px}
+    .suggest-title{font-family:var(--fd);font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--ts);margin-bottom:14px}
+    .suggest-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+    .suggest-select{background:var(--g7);border:1px solid var(--border);border-radius:var(--r-sm);padding:0 12px;height:40px;font-size:13px;font-family:var(--fb);color:var(--tp);outline:none;flex:1;min-width:160px;cursor:pointer}
+    .suggest-select:focus{border-color:var(--brand)}
+    .suggest-btn{height:40px;padding:0 20px;border-radius:var(--r-pill);background:var(--brand);color:var(--ton);font-family:var(--fd);font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;border:none;cursor:pointer;flex-shrink:0;transition:opacity .15s}
+    .suggest-btn:hover{opacity:.85}
+    .suggest-cards{display:flex;flex-direction:column;gap:10px}
+    .suggest-card{background:linear-gradient(180deg,rgba(8,13,39,.9) 0%,rgba(6,10,32,.9) 100%);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px;transition:border-color .15s}
+    .suggest-card:hover{border-color:rgba(0,255,249,.2)}
+    .suggest-card-top{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+    .suggest-need-badge{font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:3px 8px;border-radius:var(--r-pill);flex-shrink:0}
+    .suggest-vs-row{display:flex;align-items:center;gap:8px}
+    .suggest-player-block{flex:1;min-width:0}
+    .suggest-player-name{font-family:var(--fd);font-size:13px;font-weight:700;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .suggest-player-meta{font-size:11px;color:var(--tt);margin-top:1px}
+    .suggest-arrow{font-size:13px;color:var(--td);flex-shrink:0;text-align:center;min-width:28px}
+    .suggest-gain{font-family:var(--fd);font-size:12px;font-weight:700;font-stretch:25%;margin-left:auto;flex-shrink:0;padding-left:8px}
+    .suggest-load-btn{background:rgba(0,255,249,.08);border:1px solid rgba(0,255,249,.18);border-radius:var(--r-pill);color:var(--brand);font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:5px 12px;cursor:pointer;white-space:nowrap;transition:background .1s}
+    .suggest-load-btn:hover{background:rgba(0,255,249,.2)}
+    .suggest-other-team{font-size:11px;color:var(--tt);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .suggest-empty{text-align:center;padding:36px 20px;color:var(--tt);font-size:13px;line-height:1.6}
+    .suggest-empty strong{display:block;color:var(--ts);font-family:var(--fd);font-size:14px;font-weight:700;margin-bottom:6px}
+
     @media(max-width:600px){
       .row{flex-direction:column}
       .btn{width:100%}
       .hero-h{font-size:34px;line-height:38px}
       .hide-sm{display:none}
+      /* Sticky verdict bar on mobile */
+      .trade-verdict{position:sticky;top:58px;z-index:15;margin-left:-16px;margin-right:-16px;border-radius:0;border-left:none;border-right:none}
     }
   </style>
 </head>
@@ -1324,12 +1357,26 @@ function renderTradeCalculator() {
       ⚠ Depth penalty applied: each additional asset is worth less than the last (2nd = 90%, 3rd = 80%, etc.), reflecting that one star beats a pile of fillers.
     </div>
 
+    <div class="suggest-section">
+      <div class="suggest-title">💡 Suggested Trades</div>
+      <div class="suggest-controls">
+        <select class="suggest-select" id="suggest-team-select">
+          <option value="">Select your team…</option>
+          ${S.teamDynasty.map((t,i) => `<option value="${i}">${teamName(t.roster)}</option>`).join('')}
+        </select>
+        <button class="suggest-btn" onclick="findSuggestedTrades()">Find Trades</button>
+      </div>
+      <div id="suggest-cards" class="suggest-cards">
+        <div class="suggest-empty">Select your team and click Find Trades to see deals that could improve your roster.</div>
+      </div>
+    </div>
+
     <div class="trade-layout">
       <div class="trade-side" id="trade-side-a">
         <div class="trade-side-hdr">⬅ Side A receives</div>
         ${tradeSearchHTML('a')}
         <div class="trade-items" id="trade-items-a">
-          <div class="trade-empty-hint">Search for players or add picks below</div>
+          <div class="trade-empty-hint">Search for players above</div>
         </div>
         ${tradePicksHTML('a')}
         <div class="trade-total-row">
@@ -1349,7 +1396,7 @@ function renderTradeCalculator() {
         <div class="trade-side-hdr">Side B receives ➡</div>
         ${tradeSearchHTML('b')}
         <div class="trade-items" id="trade-items-b">
-          <div class="trade-empty-hint">Search for players or add picks below</div>
+          <div class="trade-empty-hint">Search for players above</div>
         </div>
         ${tradePicksHTML('b')}
         <div class="trade-total-row">
@@ -1471,7 +1518,7 @@ function renderTradeItems(side) {
   if (!container) return;
 
   if (!T[side].length) {
-    container.innerHTML = '<div class="trade-empty-hint">Search for players or add picks below</div>';
+    container.innerHTML = '<div class="trade-empty-hint">Search for players above</div>';
     if (totalEl) totalEl.textContent = '—';
     if (rawEl) rawEl.textContent = '';
     return;
@@ -1584,6 +1631,206 @@ function updateVerdict() {
     mainEl.textContent = `Lopsided — Side ${winner} wins big`;
     subEl.textContent = `Don't do this trade — ${diffStr} difference (${pctStr}% off)`;
   }
+}
+
+// ── Suggested Trades ─────────────────────────────────
+function generateTradeSuggestions(myIdx) {
+  const myTeam = S.teamDynasty[myIdx];
+  const total   = S.teamDynasty.length;
+
+  // Map positions to their ranks on my team
+  const posRanks = { QB: myTeam.qbRank, RB: myTeam.rbRank, WR: myTeam.wrRank, TE: myTeam.teRank };
+
+  // Sort positions weakest → strongest (higher rank number = weaker)
+  const allPos     = ['QB','RB','WR','TE'].sort((a,b) => posRanks[b] - posRanks[a]);
+  const weakPos    = allPos.slice(0, 2);   // my 2 weakest positions
+  const strongPos  = allPos.slice(2);       // my 2 strongest positions
+
+  const suggestions = [];
+
+  S.teamDynasty.forEach((otherTeam, idx) => {
+    if (idx === myIdx) return;
+
+    weakPos.forEach(needPos => {
+      // Their players at my weak position that have real value
+      const theirCandidates = (otherTeam.byPos[needPos] || []).filter(p => p.value > 500);
+
+      // Players I could offer: depth at any position (not my #1 overall pick)
+      const myAllPlayers = ['QB','RB','WR','TE']
+        .flatMap(pos => {
+          const arr = myTeam.byPos[pos] || [];
+          // Don't trade away my best player at a position I need
+          return weakPos.includes(pos) ? arr.slice(1) : arr;
+        })
+        .filter(p => p.value > 300);
+
+      theirCandidates.slice(0, 4).forEach(theirPlayer => {
+        myAllPlayers.forEach(myPlayer => {
+          if (myPlayer.pid === theirPlayer.pid) return;
+
+          const iGet  = theirPlayer.value;
+          const iGive = myPlayer.value;
+          if (!iGet || !iGive) return;
+
+          const netGain = iGet - iGive;
+          const pctAdv  = netGain / Math.max(iGet, iGive);
+
+          // Accept trades:
+          //   • 0–20% in my favor (slightly to moderately winning)
+          //   • Even trades (±5%) that fill a critical need (bottom 35% of league)
+          const isCriticalNeed = posRanks[needPos] > total * 0.65;
+          const isSlightlyGood = pctAdv >= 0 && pctAdv <= 0.20;
+          const isEvenNeedFill = isCriticalNeed && pctAdv >= -0.05 && pctAdv < 0;
+
+          if (!isSlightlyGood && !isEvenNeedFill) return;
+
+          // Don't suggest trading away my best overall player (top 1 by value across positions)
+          const myTopPlayer = ['QB','RB','WR','TE']
+            .flatMap(p => myTeam.byPos[p] || [])
+            .sort((a,b) => b.value - a.value)[0];
+          if (myTopPlayer && myPlayer.pid === myTopPlayer.pid) return;
+
+          suggestions.push({
+            iGive: myPlayer,
+            iGet: theirPlayer,
+            otherTeam,
+            otherIdx: idx,
+            netGain,
+            pctAdv,
+            needPos,
+            isNeedFill: isCriticalNeed,
+          });
+        });
+      });
+    });
+  });
+
+  // Deduplicate by player pair, sort by net gain desc, cap at 8
+  const seen = new Set();
+  return suggestions
+    .filter(s => {
+      const key = `${s.iGive.pid}_${s.iGet.pid}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => {
+      // Priority: need-fills first, then by net gain
+      if (a.isNeedFill !== b.isNeedFill) return a.isNeedFill ? -1 : 1;
+      return b.netGain - a.netGain;
+    })
+    .slice(0, 8);
+}
+
+function findSuggestedTrades() {
+  const sel = document.getElementById('suggest-team-select');
+  const container = document.getElementById('suggest-cards');
+  if (!sel || !container) return;
+
+  const myIdx = parseInt(sel.value);
+  if (isNaN(myIdx)) {
+    container.innerHTML = '<div class="suggest-empty">Select your team first.</div>';
+    return;
+  }
+
+  if (!S.dynastyLoaded || !S.teamDynasty.length) {
+    container.innerHTML = '<div class="suggest-empty">Dynasty values still loading — try again in a moment.</div>';
+    return;
+  }
+
+  const suggestions = generateTradeSuggestions(myIdx);
+
+  if (!suggestions.length) {
+    container.innerHTML = '<div class="suggest-empty"><strong>No trades found</strong>Your roster is well-balanced or values aren\'t loaded yet. Try after dynasty rankings finish loading.</div>';
+    return;
+  }
+
+  const total = S.teamDynasty.length;
+
+  // Position colors
+  const POS_COLORS = {
+    QB: { bg:'rgba(255,100,130,.15)', color:'#FF9EB5' },
+    RB: { bg:'rgba(0,140,255,.15)',   color:'#7CC8FF' },
+    WR: { bg:'rgba(124,255,113,.12)', color:'#8DFFA0' },
+    TE: { bg:'rgba(201,108,255,.12)', color:'#D88DFF' },
+  };
+
+  container.innerHTML = suggestions.map((s, i) => {
+    const pc    = POS_COLORS[s.needPos] || { bg:'rgba(52,70,119,.5)', color:'var(--ts)' };
+    const gain  = Math.round(s.netGain);
+    const pct   = Math.round(Math.abs(s.pctAdv) * 100);
+    const gainLabel = gain > 0
+      ? `<span class="suggest-gain" style="color:var(--success)">+${gain.toLocaleString()} (${pct}% edge)</span>`
+      : `<span class="suggest-gain" style="color:var(--brand)">Even trade — fills need</span>`;
+
+    const iGivePos = POS_COLORS[s.iGive.pos] || { bg:'rgba(52,70,119,.5)', color:'var(--ts)' };
+
+    return `
+    <div class="suggest-card">
+      <div class="suggest-card-top">
+        <span class="suggest-need-badge" style="background:${pc.bg};color:${pc.color}">NEED ${s.needPos}</span>
+        <span class="suggest-other-team">vs ${esc(teamName(s.otherTeam.roster))}</span>
+        ${gainLabel}
+      </div>
+      <div class="suggest-vs-row">
+        <div class="suggest-player-block">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+            <span class="pl-pos-tag pos-${s.iGive.pos}" style="font-size:10px;padding:2px 5px;border-radius:4px">${s.iGive.pos}</span>
+            <span class="suggest-player-name">${esc(s.iGive.name)}</span>
+          </div>
+          <div class="suggest-player-meta">You give · ${s.iGive.value.toLocaleString()}</div>
+        </div>
+        <div class="suggest-arrow">→</div>
+        <div class="suggest-player-block">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+            <span class="pl-pos-tag pos-${s.needPos}" style="font-size:10px;padding:2px 5px;border-radius:4px">${s.needPos}</span>
+            <span class="suggest-player-name">${esc(s.iGet.name)}</span>
+          </div>
+          <div class="suggest-player-meta">You get · ${s.iGet.value.toLocaleString()}</div>
+        </div>
+        <button class="suggest-load-btn" onclick="loadSuggestionIntoCalc(${i})">Load →</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Cache suggestions so Load button can reference them
+  window._lastSuggestions = suggestions;
+}
+
+function loadSuggestionIntoCalc(idx) {
+  const s = window._lastSuggestions?.[idx];
+  if (!s) return;
+
+  // Clear both sides
+  T.a = [];
+  T.b = [];
+
+  // Side A = what YOU give up
+  T.a.push({
+    id: `${s.iGive.pid}_${Date.now()}`,
+    pid: s.iGive.pid,
+    name: s.iGive.name,
+    pos: s.iGive.pos,
+    value: s.iGive.value,
+    type: 'player',
+  });
+
+  // Side B = what YOU get back
+  T.b.push({
+    id: `${s.iGet.pid}_${Date.now()+1}`,
+    pid: s.iGet.pid,
+    name: s.iGet.name,
+    pos: s.iGet.pos || s.needPos,
+    value: s.iGet.value,
+    type: 'player',
+  });
+
+  renderTradeItems('a');
+  renderTradeItems('b');
+  updateVerdict();
+
+  // Scroll to trade calculator
+  document.getElementById('trade-verdict')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ── Enter key ─────────────────────────────────────────
