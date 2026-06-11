@@ -1490,19 +1490,22 @@ function renderRosterBreakdown(t, leagueSize) {
 
 // ── Trade Calculator ──────────────────────────────────
 // Pick values (FantasyCalc normalized names first, hardcoded fallback)
+// [label, fc_lookup_name, fallback_value]
+// Fallbacks based on FC mid-tier baselines with year discounts (82% / 67% / 55%)
+// Tier multipliers: early ~1.35x, mid 1.0x, late ~0.65x
 const PICK_DEFS = [
-  // [label, fc_name, sf_val, oneqb_val]
-  ['2026 Early 1st', '2026 early 1st',  4600, 4600],
-  ['2026 Mid 1st',   '2026 mid 1st',    3400, 3400],
-  ['2026 Late 1st',  '2026 late 1st',   2200, 2200],
-  ['2026 2nd',       '2026 early 2nd',  1600, 1600],
-  ['2026 3rd',       '2026 early 3rd',   700,  700],
-  ['2027 Early 1st', '2027 early 1st',  3800, 3800],
-  ['2027 Mid 1st',   '2027 mid 1st',    2900, 2900],
-  ['2027 Late 1st',  '2027 late 1st',   2000, 2000],
-  ['2027 2nd',       '2027 early 2nd',  1300, 1300],
-  ['2028 1st',       '2028 early 1st',  3200, 3200],
-  ['2028 2nd',       '2028 early 2nd',  1100, 1100],
+  ['2026 Early 1st','2026 early 1st',4600],['2026 Mid 1st','2026 mid 1st',3400],['2026 Late 1st','2026 late 1st',2200],
+  ['2026 Early 2nd','2026 early 2nd',1900],['2026 Mid 2nd','2026 mid 2nd',1400],['2026 Late 2nd','2026 late 2nd',900],
+  ['2026 Early 3rd','2026 early 3rd',810], ['2026 Mid 3rd','2026 mid 3rd',600],  ['2026 Late 3rd','2026 late 3rd',390],
+  ['2027 Early 1st','2027 early 1st',3770],['2027 Mid 1st','2027 mid 1st',2790],['2027 Late 1st','2027 late 1st',1800],
+  ['2027 Early 2nd','2027 early 2nd',1560],['2027 Mid 2nd','2027 mid 2nd',1150],['2027 Late 2nd','2027 late 2nd',740],
+  ['2027 Early 3rd','2027 early 3rd',665], ['2027 Mid 3rd','2027 mid 3rd',490],  ['2027 Late 3rd','2027 late 3rd',320],
+  ['2028 Early 1st','2028 early 1st',3080],['2028 Mid 1st','2028 mid 1st',2280],['2028 Late 1st','2028 late 1st',1470],
+  ['2028 Early 2nd','2028 early 2nd',1270],['2028 Mid 2nd','2028 mid 2nd',940], ['2028 Late 2nd','2028 late 2nd',600],
+  ['2028 Early 3rd','2028 early 3rd',540], ['2028 Mid 3rd','2028 mid 3rd',400],  ['2028 Late 3rd','2028 late 3rd',260],
+  ['2029 Early 1st','2029 early 1st',2530],['2029 Mid 1st','2029 mid 1st',1870],['2029 Late 1st','2029 late 1st',1210],
+  ['2029 Early 2nd','2029 early 2nd',1045],['2029 Mid 2nd','2029 mid 2nd',770], ['2029 Late 2nd','2029 late 2nd',495],
+  ['2029 Early 3rd','2029 early 3rd',445], ['2029 Mid 3rd','2029 mid 3rd',330],  ['2029 Late 3rd','2029 late 3rd',210],
 ];
 
 // ── Future pick valuation ─────────────────────────────
@@ -1582,13 +1585,11 @@ function buildPickInventory(rosters, tradedPicks, nflState, league) {
 const T = { a: [], b: [], activeSide: 'a' };
 
 function pickValue(def) {
-  const isSF = (S.league?.roster_positions || []).includes('SUPER_FLEX');
-  // Try FC map first
   if (S.fcMap) {
     const v = S.fcMap[normName(def[1])];
     if (v) return v;
   }
-  return isSF ? def[2] : def[3];
+  return def[2]; // fallback value
 }
 
 function playerTradeValue(pid) {
@@ -1732,7 +1733,7 @@ function renderTradeCalculator() {
   // Populate team dropdown now if dynasty already loaded
   if (S.dynastyLoaded) populateSuggestDropdown();
 
-  // Wire up search inputs
+  // Wire up player search inputs
   ['a','b'].forEach(side => {
     const inp = document.getElementById(`trade-search-${side}`);
     const dd = document.getElementById(`trade-dd-${side}`);
@@ -1740,6 +1741,14 @@ function renderTradeCalculator() {
     inp.addEventListener('focus', () => tradeSearch(side));
     inp.addEventListener('blur', () => setTimeout(() => { dd.classList.remove('open'); }, 180));
     inp.addEventListener('keydown', e => { if (e.key === 'Escape') dd.classList.remove('open'); });
+
+    // Wire up pick search inputs
+    const pi = document.getElementById(`pick-search-${side}`);
+    const pd = document.getElementById(`pick-dd-${side}`);
+    pi.addEventListener('input', () => pickSearch(side));
+    pi.addEventListener('focus', () => pickSearch(side));
+    pi.addEventListener('blur', () => setTimeout(() => { pd.classList.remove('open'); }, 180));
+    pi.addEventListener('keydown', e => { if (e.key === 'Escape') pd.classList.remove('open'); });
   });
 }
 
@@ -1752,12 +1761,12 @@ function tradeSearchHTML(side) {
 }
 
 function tradePicksHTML(side) {
-  const isSF = (S.league?.roster_positions || []).includes('SUPER_FLEX');
   return `
     <div class="pick-section">
       <div class="pick-section-label">Add Draft Pick</div>
-      <div class="pick-grid">
-        ${PICK_DEFS.map((def, i) => `<button class="pick-btn" onclick="addPick('${side}',${i})">${def[0]}</button>`).join('')}
+      <div class="trade-search-wrap">
+        <input type="text" class="trade-search" id="pick-search-${side}" placeholder="Search picks (e.g. 2027 early 1st)…" autocomplete="off" spellcheck="false"/>
+        <div class="trade-dropdown" id="pick-dd-${side}"></div>
       </div>
     </div>`;
 }
@@ -1825,6 +1834,46 @@ function addPick(side, defIdx) {
   T[side].push({ id: `pick_${defIdx}_${Date.now()}`, name: def[0], pos: 'PICK', value, type: 'pick' });
   renderTradeItems(side);
   updateVerdict();
+}
+
+function pickSearch(side) {
+  const inp = document.getElementById(`pick-search-${side}`);
+  const dd = document.getElementById(`pick-dd-${side}`);
+  if (!inp || !dd) return;
+  const q = inp.value.trim().toLowerCase();
+
+  // Show all picks when focused with no query, filter when typing
+  const results = q.length === 0
+    ? PICK_DEFS
+    : PICK_DEFS.filter(def => def[0].toLowerCase().includes(q));
+
+  if (!results.length) {
+    dd.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--tt)">No picks match</div>';
+    dd.classList.add('open');
+    return;
+  }
+
+  const ROUND_COLORS = { '1st':'#FF9EB5', '2nd':'#7CC8FF', '3rd':'#8DFFA0' };
+  dd.innerHTML = results.map((def, _) => {
+    const idx = PICK_DEFS.indexOf(def);
+    const val = pickValue(def);
+    const roundKey = def[0].includes('1st') ? '1st' : def[0].includes('2nd') ? '2nd' : '3rd';
+    const color = ROUND_COLORS[roundKey] || 'var(--ts)';
+    return `<div class="trade-dd-item" onmousedown="addPickFromSearch('${side}',${idx})">
+      <span class="pl-pos-tag" style="flex-shrink:0;font-size:10px;padding:2px 5px;border-radius:4px;background:rgba(231,254,83,.1);color:${color}">${roundKey}</span>
+      <span class="trade-dd-name">${def[0]}</span>
+      <span class="trade-dd-val">${val.toLocaleString()}</span>
+    </div>`;
+  }).join('');
+  dd.classList.add('open');
+}
+
+function addPickFromSearch(side, defIdx) {
+  const inp = document.getElementById(`pick-search-${side}`);
+  const dd = document.getElementById(`pick-dd-${side}`);
+  if (inp) inp.value = '';
+  if (dd) dd.classList.remove('open');
+  addPick(side, defIdx);
 }
 
 function removeTradeItem(side, itemId) {
