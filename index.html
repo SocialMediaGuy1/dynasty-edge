@@ -1618,8 +1618,13 @@ function tradeRawTotal(side) {
   return T[side].reduce((sum, item) => sum + (item.value || 0), 0);
 }
 
+function sidesBalanced() {
+  // Depth penalty is symmetric when both sides have the same asset count — skip it
+  return T.a.length > 0 && T.a.length === T.b.length;
+}
+
 function tradeAdjTotal(side) {
-  // Sort descending so best assets get full value, depth gets discounted
+  if (sidesBalanced()) return tradeRawTotal(side);
   const sorted = [...T[side]].sort((a, b) => b.value - a.value);
   return Math.round(sorted.reduce((sum, item, i) => sum + (item.value || 0) * depthMult(i), 0));
 }
@@ -1648,7 +1653,7 @@ function renderTradeCalculator() {
     </div>
 
     <div style="font-size:11px;color:var(--td);margin-bottom:14px;line-height:1.5;">
-      ⚠ Depth penalty applied: each additional asset is worth less than the last (2nd = 90%, 3rd = 80%, etc.), reflecting that one star beats a pile of fillers.
+      ⚠ Depth penalty on uneven trades: each extra asset is worth less than the last (2nd = 90%, 3rd = 80%, etc.). Penalty is skipped when both sides have equal asset counts.
     </div>
 
     <div class="trade-layout">
@@ -1895,11 +1900,12 @@ function renderTradeItems(side) {
     return;
   }
 
+  const balanced = sidesBalanced();
   const sorted = [...T[side]].sort((a, b) => b.value - a.value);
   container.innerHTML = sorted.map((item, i) => {
-    const mult = depthMult(i);
+    const mult = balanced ? 1.0 : depthMult(i);
     const adjVal = Math.round(item.value * mult);
-    const penaltyLabel = mult < 1 ? `<span style="font-size:10px;color:var(--td);margin-left:4px">(×${mult.toFixed(2)})</span>` : '';
+    const penaltyLabel = (!balanced && mult < 1) ? `<span style="font-size:10px;color:var(--td);margin-left:4px">(×${mult.toFixed(2)})</span>` : '';
     return `
     <div class="trade-item">
       ${item.pos !== 'PICK'
@@ -1907,7 +1913,7 @@ function renderTradeItems(side) {
         : `<span class="pl-pos-tag" style="font-size:10px;padding:2px 5px;border-radius:4px;flex-shrink:0;background:rgba(231,254,83,.1);color:var(--brand-alt)">PK</span>`
       }
       <span class="trade-item-name">${item.name}${penaltyLabel}</span>
-      <span class="trade-item-val" style="${mult < 1 ? 'color:var(--ts)' : ''}">${adjVal.toLocaleString()}</span>
+      <span class="trade-item-val" style="${(!balanced && mult < 1) ? 'color:var(--ts)' : ''}">${adjVal.toLocaleString()}</span>
       <button class="trade-item-remove" onclick="removeTradeItem('${side}','${item.id}')">×</button>
     </div>`;
   }).join('');
@@ -1915,7 +1921,7 @@ function renderTradeItems(side) {
   const adj = tradeAdjTotal(side);
   const raw = tradeRawTotal(side);
   if (totalEl) totalEl.textContent = adj.toLocaleString();
-  if (rawEl) rawEl.textContent = adj !== raw ? `${raw.toLocaleString()} raw` : '';
+  if (rawEl) rawEl.textContent = (!balanced && adj !== raw) ? `${raw.toLocaleString()} raw` : '';
 }
 
 function updateVerdict() {
