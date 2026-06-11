@@ -787,6 +787,7 @@ async function loadLeague(lid) {
     S.league = league;
     S.nflState = nflState;
     _recentTradesLoaded = false; // reset so new league re-fetches
+    _fullHistoryLoaded = false;
     S._allTrades = [];
     // Detect scoring format for this league
     const rec = league.scoring_settings?.rec ?? 1;
@@ -1702,8 +1703,12 @@ function renderTradeCalculator() {
         </div>
       </div>
       <div class="suggest-panel" id="spanel-recent">
-        <div style="margin-bottom:12px">
+        <div style="margin-bottom:10px">
           <input type="text" id="trade-feed-search" class="txt" placeholder="Search by player name…" autocomplete="off" spellcheck="false" oninput="filterTradeFeed()" style="width:100%;box-sizing:border-box"/>
+        </div>
+        <div id="trade-history-bar" style="display:none;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span id="trade-history-status" style="font-size:11px;color:var(--td);flex:1"></span>
+          <button id="trade-history-btn" class="btn" style="height:30px;font-size:10px;padding:0 14px;border-radius:var(--r-pill)" onclick="loadRecentTrades(true)">Load full history</button>
         </div>
         <div id="trade-feed-count" style="font-size:11px;color:var(--td);margin-bottom:10px;display:none"></div>
         <div id="trade-feed" class="trade-feed">
@@ -1947,25 +1952,61 @@ function switchSuggestTab(tab) {
 }
 
 // ── League Trades ─────────────────────────────────────
-let _recentTradesLoaded = false;
+let _recentTradesLoaded = false, _fullHistoryLoaded = false;
 
-async function loadRecentTrades() {
+async function loadRecentTrades(includeHistory) {
   if (!S.league) return;
   const feed = document.getElementById('trade-feed');
+  const histBar = document.getElementById('trade-history-bar');
+  const histStatus = document.getElementById('trade-history-status');
+  const histBtn = document.getElementById('trade-history-btn');
   if (!feed) return;
-  if (_recentTradesLoaded) { filterTradeFeed(); return; }
+
+  // If already loaded at the right level, just re-render
+  if (_recentTradesLoaded && !includeHistory) { filterTradeFeed(); return; }
+  if (_fullHistoryLoaded && includeHistory) { filterTradeFeed(); return; }
+
+  // Ensure player names are available for search
+  if (!S._allPlayers) {
+    S._allPlayers = await fetchPlayers().catch(() => ({}));
+  }
 
   feed.innerHTML = '<div class="suggest-empty">Loading trades…</div>';
-  const lid = S.league.league_id;
+  if (histBar) histBar.style.display = 'none';
+
   try {
-    const rounds = Array.from({ length: 20 }, (_, i) => i);
-    const results = await Promise.all(
-      rounds.map(r => apiFetch(`${API}/league/${lid}/transactions/${r}`).catch(() => []))
-    );
-    S._allTrades = results.flat()
-      .filter(t => t && t.type === 'trade' && t.status === 'complete')
-      .sort((a, b) => (b.status_updated_at || 0) - (a.status_updated_at || 0));
+    // Collect season IDs to fetch: current + previous chain if history requested
+    const seasonIds = [S.league.league_id];
+    if (includeHistory) {
+      if (histStatus) histStatus.textContent = 'Loading season history…';
+      if (histBar) histBar.style.display = 'flex';
+      if (histBtn) histBtn.style.display = 'none';
+      let prevId = S.league.previous_league_id;
+      let depth = 0;
+      while (prevId && depth < 8) {
+        seasonIds.push(prevId);
+        try {
+          const prevLeague = await apiFetch(`${API}/league/${prevId}`);
+          prevId = prevLeague?.previous_league_id;
+        } catch { break; }
+        depth++;
+      }
+    }
+
+    const allTrades = [];
+    for (const lid of seasonIds) {
+      const rounds = Array.from({ length: 19 }, (_, i) => i); // 0-18
+      const results = await Promise.all(
+        rounds.map(r => apiFetch(`${API}/league/${lid}/transactions/${r}`).catch(() => []))
+      );
+      results.flat()
+        .filter(t => t && t.type === 'trade' && t.status === 'complete')
+        .forEach(t => allTrades.push(t));
+    }
+
+    S._allTrades = allTrades.sort((a, b) => (b.status_updated_at || 0) - (a.status_updated_at || 0));
     _recentTradesLoaded = true;
+    if (includeHistory) _fullHistoryLoaded = true;
     filterTradeFeed();
   } catch(e) {
     feed.innerHTML = `<div class="suggest-empty">Couldn't load trades: ${e.message}</div>`;
@@ -1976,7 +2017,18 @@ function filterTradeFeed() {
   const feed = document.getElementById('trade-feed');
   const countEl = document.getElementById('trade-feed-count');
   const searchEl = document.getElementById('trade-feed-search');
+  const histBar = document.getElementById('trade-history-bar');
+  const histStatus = document.getElementById('trade-history-status');
+  const histBtn = document.getElementById('trade-history-btn');
   if (!feed) return;
+
+  // Update history bar
+  if (histBar && _recentTradesLoaded) {
+    histBar.style.display = 'flex';
+    const total = S._allTrades?.length || 0;
+    if (histStatus) histStatus.textContent = `${total} trade${total !== 1 ? 's' : ''} loaded${_fullHistoryLoaded ? ' (full history)' : ' (current season)'}`;
+    if (histBtn) histBtn.style.display = _fullHistoryLoaded ? 'none' : 'inline-flex';
+  }
 
   const q = (searchEl?.value || '').trim();
   const qn = q ? normName(q) : '';
@@ -1991,10 +2043,9 @@ function filterTradeFeed() {
   let filtered = trades;
   let matchName = '';
   if (qn) {
+    // player IDs are KEYS in adds/drops objects (values are roster_ids)
     filtered = trades.filter(t => {
-      const allAdds = Object.values(t.adds || {});
-      const allDrops = Object.values(t.drops || {});
-      const allPids = [...allAdds, ...allDrops];
+      const allPids = [...Object.keys(t.adds || {}), ...Object.keys(t.drops || {})];
       return allPids.some(pid => {
         const p = S._allPlayers?.[String(pid)];
         if (!p) return false;
@@ -2008,12 +2059,12 @@ function filterTradeFeed() {
       countEl.style.display = 'block';
     }
   } else {
-    filtered = filtered.slice(0, 25);
+    filtered = filtered.slice(0, 30);
     if (countEl) countEl.style.display = 'none';
   }
 
   if (!filtered.length) {
-    feed.innerHTML = `<div class="suggest-empty">No trades found for "${q}".</div>`;
+    feed.innerHTML = `<div class="suggest-empty">No trades found${qn ? ` for "${q}"` : ''}.</div>`;
     return;
   }
 
