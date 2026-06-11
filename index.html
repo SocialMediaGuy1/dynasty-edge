@@ -1694,6 +1694,7 @@ function renderTradeCalculator() {
       <div class="suggest-tab-bar">
         <button class="suggest-tab-btn active" id="stab-suggested" onclick="switchSuggestTab('suggested')">💡 Suggested</button>
         <button class="suggest-tab-btn" id="stab-recent" onclick="switchSuggestTab('recent')">📋 League Trades</button>
+        <button class="suggest-tab-btn" id="stab-community" onclick="switchSuggestTab('community')">🌐 Recent Trades</button>
       </div>
       <div class="suggest-panel active" id="spanel-suggested">
         <div id="suggest-cards" class="suggest-cards">
@@ -1707,6 +1708,20 @@ function renderTradeCalculator() {
         <div id="trade-feed-count" style="font-size:11px;color:var(--td);margin-bottom:10px;display:none"></div>
         <div id="trade-feed" class="trade-feed">
           <div class="suggest-empty">Select a league to see recent trades.</div>
+        </div>
+      </div>
+      <div class="suggest-panel" id="spanel-community">
+        <div style="margin-bottom:12px">
+          <input type="text" id="community-feed-search" class="txt" placeholder="Search by player name…" autocomplete="off" spellcheck="false" oninput="filterCommunityTrades()" style="width:100%;box-sizing:border-box"/>
+        </div>
+        <div id="community-feed-count" style="font-size:11px;color:var(--td);margin-bottom:10px;display:none"></div>
+        <div id="community-feed" class="trade-feed">
+          <div class="suggest-empty" style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:32px 0">
+            <div style="font-size:28px">🌐</div>
+            <div style="font-size:14px;font-weight:700;color:var(--ts)">Recent Dynasty Trades</div>
+            <div style="font-size:12px;color:var(--tt);text-align:center">Real trades from the dynasty community — updated daily.</div>
+            <button class="btn" style="height:38px;font-size:11px;padding:0 20px" onclick="loadCommunityTrades()">Load Trades</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1829,9 +1844,7 @@ function renderTradeItems(side) {
     return;
   }
 
-  // Sort descending for display so we can show depth multipliers
   const sorted = [...T[side]].sort((a, b) => b.value - a.value);
-  // Build display with depth penalty shown on each item after the first
   container.innerHTML = sorted.map((item, i) => {
     const mult = depthMult(i);
     const adjVal = Math.round(item.value * mult);
@@ -1878,43 +1891,24 @@ function updateVerdict() {
   const larger = Math.max(totA, totB);
   const diff = totA - totB;
   const absDiff = Math.abs(diff);
-  // pctOff: how far off from 50/50 as a fraction of the larger side (0 = even, 1 = one side has everything)
   const pctOff = larger > 0 ? absDiff / larger : 0;
 
-  // ── Fair zone boundaries (% of larger side) ──────────
-  // 0–8%:  Fair trade (inside zone)
-  // 8–18%: Slight edge (touching zone edge)
-  // 18–32%: Clear advantage
-  // 32%+:  Lopsided
-  const FAIR = 0.08;
-  const SLIGHT = 0.18;
-  const CLEAR = 0.32;
-
-  // Fair zone width = 16% of bar, centered at 50%
-  const FAIR_HALF_BAR = 8; // px% on each side of center = 8% of bar width
+  const FAIR = 0.08, SLIGHT = 0.18, CLEAR = 0.32;
+  const FAIR_HALF_BAR = 8;
   if (fzEl) { fzEl.style.width = `${FAIR_HALF_BAR * 2}%`; fzEl.style.left = `${50 - FAIR_HALF_BAR}%`; }
 
-  // Bar fill: grows from center, capped at 42% (leaves room for labels)
   const fillPct = Math.min(pctOff * 1.2 * 42, 42);
-
   if (barEl) {
     let color;
-    if (pctOff <= FAIR)   color = 'var(--brand)';
+    if (pctOff <= FAIR)        color = 'var(--brand)';
     else if (pctOff <= SLIGHT) color = 'var(--brand-alt)';
     else if (pctOff <= CLEAR)  color = 'var(--warn)';
     else                       color = diff > 0 ? 'var(--success)' : 'var(--err)';
-
-    if (diff >= 0) {
-      barEl.style.left = `${50 - fillPct}%`;
-      barEl.style.width = `${fillPct}%`;
-    } else {
-      barEl.style.left = '50%';
-      barEl.style.width = `${fillPct}%`;
-    }
+    if (diff >= 0) { barEl.style.left = `${50 - fillPct}%`; barEl.style.width = `${fillPct}%`; }
+    else           { barEl.style.left = '50%';               barEl.style.width = `${fillPct}%`; }
     barEl.style.background = color;
   }
 
-  // ── Verdict text ──────────────────────────────────────
   const winner = diff > 0 ? 'A' : 'B';
   const diffStr = absDiff.toLocaleString();
   const pctStr = Math.round(pctOff * 100);
@@ -1938,9 +1932,298 @@ function updateVerdict() {
   }
 }
 
+// ── Tab switching ─────────────────────────────────────
+function switchSuggestTab(tab) {
+  ['suggested','recent','community'].forEach(t => {
+    const btn = document.getElementById(`stab-${t}`);
+    const panel = document.getElementById(`spanel-${t}`);
+    if (!btn || !panel) return;
+    const active = t === tab;
+    btn.classList.toggle('active', active);
+    panel.classList.toggle('active', active);
+  });
+  if (tab === 'recent')    loadRecentTrades();
+  if (tab === 'community') { /* user clicks Load Trades button to fetch */ }
+}
+
+// ── League Trades ─────────────────────────────────────
+let _recentTradesLoaded = false;
+
+async function loadRecentTrades() {
+  if (!S.league) return;
+  const feed = document.getElementById('trade-feed');
+  if (!feed) return;
+  if (_recentTradesLoaded) { filterTradeFeed(); return; }
+
+  feed.innerHTML = '<div class="suggest-empty">Loading trades…</div>';
+  const lid = S.league.league_id;
+  try {
+    const rounds = Array.from({ length: 20 }, (_, i) => i);
+    const results = await Promise.all(
+      rounds.map(r => apiFetch(`${API}/league/${lid}/transactions/${r}`).catch(() => []))
+    );
+    S._allTrades = results.flat()
+      .filter(t => t && t.type === 'trade' && t.status === 'complete')
+      .sort((a, b) => (b.status_updated_at || 0) - (a.status_updated_at || 0));
+    _recentTradesLoaded = true;
+    filterTradeFeed();
+  } catch(e) {
+    feed.innerHTML = `<div class="suggest-empty">Couldn't load trades: ${e.message}</div>`;
+  }
+}
+
+function filterTradeFeed() {
+  const feed = document.getElementById('trade-feed');
+  const countEl = document.getElementById('trade-feed-count');
+  const searchEl = document.getElementById('trade-feed-search');
+  if (!feed) return;
+
+  const q = (searchEl?.value || '').trim();
+  const qn = q ? normName(q) : '';
+
+  let trades = S._allTrades || [];
+  if (!trades.length) {
+    feed.innerHTML = '<div class="suggest-empty">No trades found in this league.</div>';
+    if (countEl) countEl.style.display = 'none';
+    return;
+  }
+
+  let filtered = trades;
+  let matchName = '';
+  if (qn) {
+    filtered = trades.filter(t => {
+      const allAdds = Object.values(t.adds || {});
+      const allDrops = Object.values(t.drops || {});
+      const allPids = [...allAdds, ...allDrops];
+      return allPids.some(pid => {
+        const p = S._allPlayers?.[String(pid)];
+        if (!p) return false;
+        const n = normName(`${p.first_name||''} ${p.last_name||''}`.trim());
+        if (n.includes(qn)) { matchName = `${p.first_name||''} ${p.last_name||''}`.trim(); return true; }
+        return false;
+      });
+    });
+    if (countEl) {
+      countEl.textContent = `${filtered.length} trade${filtered.length !== 1 ? 's' : ''} involving ${matchName || q}`;
+      countEl.style.display = 'block';
+    }
+  } else {
+    filtered = filtered.slice(0, 25);
+    if (countEl) countEl.style.display = 'none';
+  }
+
+  if (!filtered.length) {
+    feed.innerHTML = `<div class="suggest-empty">No trades found for "${q}".</div>`;
+    return;
+  }
+
+  feed.innerHTML = filtered.map(t => renderTradeFeedCard(t, qn)).join('');
+}
+
+function renderTradeFeedCard(t, highlightQuery) {
+  const allAdds = t.adds || {};
+  const allDrops = t.drops || {};
+  const picksTraded = t.draft_picks || [];
+  const ts = t.status_updated_at ? new Date(t.status_updated_at) : null;
+  const dateStr = ts ? ts.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '';
+
+  // Group by roster_id: what each team receives
+  const sides = {};
+  Object.entries(allAdds).forEach(([pid, rid]) => {
+    if (!sides[rid]) sides[rid] = { gets: [], gives: [] };
+    sides[rid].gets.push(pid);
+  });
+  Object.entries(allDrops).forEach(([pid, rid]) => {
+    if (!sides[rid]) sides[rid] = { gets: [], gives: [] };
+    sides[rid].gives.push(pid);
+  });
+
+  const sideKeys = Object.keys(sides);
+  if (sideKeys.length < 2 && !picksTraded.length) return '';
+
+  function renderAsset(pid, highlight) {
+    const p = S._allPlayers?.[String(pid)];
+    if (!p) return '';
+    const name = `${p.first_name||''} ${p.last_name||''}`.trim();
+    const pos = p.position || '?';
+    const isMatch = highlight && normName(name).includes(highlight);
+    const nameHtml = isMatch ? `<span style="color:var(--brand)">${esc(name)}</span>` : esc(name);
+    return `<div class="trade-feed-asset"><span class="pl-pos-tag pos-${pos}" style="font-size:9px;padding:1px 4px;border-radius:3px;flex-shrink:0">${pos}</span>${nameHtml}</div>`;
+  }
+
+  const sideHTML = sideKeys.slice(0, 2).map((rid, si) => {
+    const side = sides[rid];
+    const roster = S.rosters.find(r => r.roster_id == rid);
+    const teamLabel = roster ? teamName(roster) : `Team ${rid}`;
+    const assets = (side.gets || []).map(pid => renderAsset(pid, highlightQuery)).filter(Boolean);
+    const myPicks = picksTraded.filter(pk => pk.roster_id === parseInt(rid));
+    myPicks.forEach(pk => {
+      assets.push(`<div class="trade-feed-asset"><span class="pl-pos-tag" style="font-size:9px;padding:1px 4px;border-radius:3px;flex-shrink:0;background:rgba(255,215,0,.15);color:#FFD700">PK</span>${esc(pk.season)} R${pk.round}</div>`);
+    });
+    if (!assets.length) return '';
+    return `<div class="trade-feed-side"><div class="trade-feed-side-lbl">${esc(teamLabel)} gets</div>${assets.join('')}</div>`;
+  }).filter(Boolean);
+
+  if (!sideHTML.length) return '';
+
+  return `
+  <div class="trade-feed-card">
+    <div class="trade-feed-hdr">
+      <span class="trade-feed-date">${dateStr}</span>
+    </div>
+    <div class="trade-feed-sides">
+      ${sideHTML[0] || ''}
+      ${sideHTML.length > 1 ? '<div class="trade-feed-divider"></div>' : ''}
+      ${sideHTML[1] || ''}
+    </div>
+  </div>`;
+}
+
+// ── Community Trades (FantasyCalc) ────────────────────
+let _communityTradesLoaded = false;
+let _allCommunityTrades = [];
+
+async function loadCommunityTrades() {
+  const feed = document.getElementById('community-feed');
+  if (!feed) return;
+  if (_communityTradesLoaded) { filterCommunityTrades(); return; }
+
+  feed.innerHTML = '<div class="suggest-empty">Loading recent dynasty trades…</div>';
+
+  const numQbs = S.isSF ? 2 : 1;
+  const ppr = S.pprFormat ?? 1;
+  const url = `https://api.fantasycalc.com/trades/recent?isDynasty=true&numQbs=${numQbs}&ppr=${ppr}`;
+
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    _allCommunityTrades = Array.isArray(data) ? data : (data.trades || data.results || []);
+    _communityTradesLoaded = true;
+    filterCommunityTrades();
+  } catch(e) {
+    feed.innerHTML = `<div class="suggest-empty" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:32px 0">
+      <div style="font-size:28px">⚠️</div>
+      <div style="font-size:13px;color:var(--ts)">Couldn't load trades</div>
+      <div style="font-size:11px;color:var(--tt);text-align:center">Check your connection and try again.</div>
+      <button class="btn" style="height:34px;font-size:10px;padding:0 16px;margin-top:4px" onclick="loadCommunityTrades()">Retry</button>
+    </div>`;
+    _communityTradesLoaded = false;
+  }
+}
+
+function filterCommunityTrades() {
+  const feed = document.getElementById('community-feed');
+  const countEl = document.getElementById('community-feed-count');
+  const searchEl = document.getElementById('community-feed-search');
+  if (!feed) return;
+
+  const q = (searchEl?.value || '').trim();
+  const qn = q ? normName(q) : '';
+
+  let trades = _allCommunityTrades;
+  if (!trades.length) {
+    feed.innerHTML = '<div class="suggest-empty">No trades found.</div>';
+    if (countEl) countEl.style.display = 'none';
+    return;
+  }
+
+  function getSides(t) {
+    // Handle both sideOne/sideTwo and sideA/sideB naming
+    const a = t.sideOne || t.sideA || t.side1 || {};
+    const b = t.sideTwo || t.sideB || t.side2 || {};
+    return [a, b];
+  }
+
+  function sidePlayerNames(side) {
+    const players = side.players || [];
+    return players.map(item => normName(item?.player?.name || item?.name || ''));
+  }
+
+  let filtered = trades;
+  if (qn) {
+    filtered = trades.filter(t => {
+      const [a, b] = getSides(t);
+      const names = [...sidePlayerNames(a), ...sidePlayerNames(b)];
+      return names.some(n => n.includes(qn));
+    });
+    if (countEl) {
+      countEl.textContent = `${filtered.length} trade${filtered.length !== 1 ? 's' : ''} involving "${q}"`;
+      countEl.style.display = 'block';
+    }
+  } else {
+    filtered = filtered.slice(0, 30);
+    if (countEl) countEl.style.display = 'none';
+  }
+
+  if (!filtered.length) {
+    feed.innerHTML = `<div class="suggest-empty">No trades found for "${q}".</div>`;
+    return;
+  }
+
+  feed.innerHTML = filtered.map(t => renderCommunityTradeCard(t, qn)).join('');
+}
+
+function renderCommunityTradeCard(t, highlightQuery) {
+  const [sideA, sideB] = [t.sideOne || t.sideA || t.side1 || {}, t.sideTwo || t.sideB || t.side2 || {}];
+  const dateStr = t.date ? new Date(t.date).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '';
+
+  const POS_COLORS = { QB:'#FF9EB5', RB:'#7CC8FF', WR:'#8DFFA0', TE:'#D88DFF', K:'#AAA', DEF:'#AAA' };
+
+  function renderSideAssets(side) {
+    const parts = [];
+    const players = side.players || [];
+    players.forEach(item => {
+      const p = item.player || item;
+      const name = p.name || p.playerName || '?';
+      const pos = (p.position || p.pos || '?').toUpperCase();
+      const val = item.value || item.adjustedValue || 0;
+      const isMatch = highlightQuery && normName(name).includes(highlightQuery);
+      const nameHtml = isMatch ? `<span style="color:var(--brand)">${esc(name)}</span>` : esc(name);
+      const posColor = POS_COLORS[pos] || 'var(--ts)';
+      parts.push(`<div class="trade-feed-asset">
+        <span class="pl-pos-tag pos-${pos}" style="font-size:9px;padding:1px 4px;border-radius:3px;flex-shrink:0;color:${posColor}">${pos}</span>
+        ${nameHtml}
+        ${val > 0 ? `<span style="font-size:10px;color:var(--td);margin-left:auto">${val.toLocaleString()}</span>` : ''}
+      </div>`);
+    });
+    const picks = side.picks || [];
+    picks.forEach(item => {
+      const pk = item.pick || item;
+      const desc = pk.description || pk.pickDescription || pk.desc || 'Pick';
+      const val = item.value || item.adjustedValue || 0;
+      parts.push(`<div class="trade-feed-asset">
+        <span class="pl-pos-tag" style="font-size:9px;padding:1px 4px;border-radius:3px;flex-shrink:0;background:rgba(255,215,0,.15);color:#FFD700">PK</span>
+        ${esc(desc)}
+        ${val > 0 ? `<span style="font-size:10px;color:var(--td);margin-left:auto">${val.toLocaleString()}</span>` : ''}
+      </div>`);
+    });
+    return parts.join('');
+  }
+
+  const aHtml = renderSideAssets(sideA);
+  const bHtml = renderSideAssets(sideB);
+  if (!aHtml && !bHtml) return '';
+
+  const totA = sideA.totalValue || 0;
+  const totB = sideB.totalValue || 0;
+
+  return `
+  <div class="trade-feed-card">
+    <div class="trade-feed-hdr">
+      ${dateStr ? `<span class="trade-feed-date">${dateStr}</span>` : ''}
+      ${(totA > 0 && totB > 0) ? `<span style="font-size:10px;color:var(--td);margin-left:auto">${totA.toLocaleString()} vs ${totB.toLocaleString()}</span>` : ''}
+    </div>
+    <div class="trade-feed-sides">
+      <div class="trade-feed-side">${aHtml}</div>
+      <div class="trade-feed-divider"></div>
+      <div class="trade-feed-side">${bHtml}</div>
+    </div>
+  </div>`;
+}
+
 // ── Suggested Trades ─────────────────────────────────
 function populateSuggestDropdown() {
-  // Resolve the user's roster index then auto-run suggestions
   if (!S.teamDynasty.length) return;
   if (S.myUserId) {
     const myIdx = S.teamDynasty.findIndex(t => t.roster._user?.user_id === S.myUserId);
@@ -1948,371 +2231,142 @@ function populateSuggestDropdown() {
   }
   findSuggestedTrades();
 }
+
 function generateTradeSuggestions(myIdx) {
   const myTeam = S.teamDynasty[myIdx];
-  const total  = S.teamDynasty.length;
-
+  const total   = S.teamDynasty.length;
   const posRanks = { QB: myTeam.qbRank, RB: myTeam.rbRank, WR: myTeam.wrRank, TE: myTeam.teRank };
   const allPos   = ['QB','RB','WR','TE'].sort((a,b) => posRanks[b] - posRanks[a]);
   const weakPos  = allPos.slice(0, 2);
-  const strongPos = allPos.slice(2);
+  const strongPos= allPos.slice(2);
 
-  // My single most valuable player — protect from all suggestions
+  const myAllPlayers = ['QB','RB','WR','TE'].flatMap(pos => {
+    const arr = myTeam.byPos[pos] || [];
+    return weakPos.includes(pos) ? arr.slice(1) : arr;
+  }).filter(p => p.value > 300);
+
   const myTopPlayer = ['QB','RB','WR','TE']
     .flatMap(p => myTeam.byPos[p] || [])
     .sort((a,b) => b.value - a.value)[0];
 
-  // My most valuable future pick available to use as a sweetener
-  const myBestPick = (myTeam.picks || [])
-    .filter(p => p.value > 400)
-    .sort((a,b) => b.value - a.value)[0] || null;
-
+  const typeCaps = { '1v1': 3, '2v1': 2, '1v2': 2, 'player+pick': 2 };
+  const typeCounts = { '1v1': 0, '2v1': 0, '1v2': 0, 'player+pick': 0 };
   const suggestions = [];
+  const seen = new Set();
 
   S.teamDynasty.forEach((otherTeam, idx) => {
     if (idx === myIdx) return;
+    const pickInventory = S.teamDynasty[myIdx].picks || [];
 
     weakPos.forEach(needPos => {
-      const isCriticalNeed = posRanks[needPos] > total * 0.65;
+      const theirCandidates = (otherTeam.byPos[needPos] || []).filter(p => p.value > 500);
+      const theirDepth = ['QB','RB','WR','TE'].flatMap(pos => {
+        const arr = otherTeam.byPos[pos] || [];
+        return arr.slice(1); // skip their best at each pos
+      }).filter(p => p.value > 300);
 
-      // Their players at my weak position with real value
-      const theirCands = (otherTeam.byPos[needPos] || []).filter(p => p.value > 500).slice(0, 4);
+      theirCandidates.slice(0, 3).forEach(theirPlayer => {
 
-      // Players I can trade: depth at strong positions; non-starters at weak positions
-      const myTradeables = ['QB','RB','WR','TE']
-        .flatMap(pos => {
-          const arr = myTeam.byPos[pos] || [];
-          return weakPos.includes(pos) ? arr.slice(1) : arr;
-        })
-        .filter(p => p.value > 300 && (!myTopPlayer || p.pid !== myTopPlayer.pid));
-
-      theirCands.forEach(theirPlayer => {
-
-        // ── TYPE 1: Straight 1-for-1 swap ──────────────────────────
-        myTradeables.forEach(myPlayer => {
+        // — 1v1 —
+        myAllPlayers.forEach(myPlayer => {
           if (myPlayer.pid === theirPlayer.pid) return;
-          const giveTotal = myPlayer.value, getTotal = theirPlayer.value;
-          const netGain = getTotal - giveTotal;
-          const pctAdv  = netGain / Math.max(getTotal, giveTotal);
-          const isOk = (pctAdv >= 0 && pctAdv <= 0.22) ||
-                       (isCriticalNeed && pctAdv >= -0.05 && pctAdv < 0);
-          if (!isOk) return;
-          suggestions.push({
-            give: [myPlayer], get: [theirPlayer],
-            givePicks: [], getPicks: [],
-            giveTotal, getTotal, netGain, pctAdv,
-            otherTeam, otherIdx: idx,
-            needPos, isNeedFill: isCriticalNeed, tradeType: '1v1',
-          });
+          if (myTopPlayer && myPlayer.pid === myTopPlayer.pid) return;
+          const netGain = theirPlayer.value - myPlayer.value;
+          const pctAdv  = netGain / Math.max(theirPlayer.value, myPlayer.value);
+          const isCrit  = posRanks[needPos] > total * 0.65;
+          if (!((pctAdv >= 0 && pctAdv <= 0.22) || (isCrit && pctAdv >= -0.05 && pctAdv < 0))) return;
+          if (typeCounts['1v1'] >= typeCaps['1v1']) return;
+          const key = `1v1_${myPlayer.pid}_${theirPlayer.pid}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+          typeCounts['1v1']++;
+          suggestions.push({ tradeType:'1v1', give:[myPlayer], get:[theirPlayer], givePicks:[], getPicks:[],
+            giveTotal:myPlayer.value, getTotal:theirPlayer.value,
+            netGain, pctAdv, otherTeam, otherIdx:idx, needPos, isNeedFill:isCrit });
         });
 
-        // ── TYPE 2: Player + Pick to sweeten a deal ─────────────────
-        if (myBestPick) {
-          myTradeables.forEach(myPlayer => {
-            if (myPlayer.pid === theirPlayer.pid) return;
-            // Only add pick when the 1v1 alone doesn't work (player is undervalued)
-            const straight = (theirPlayer.value - myPlayer.value) / Math.max(theirPlayer.value, myPlayer.value);
-            if (straight >= 0) return; // 1v1 already fine, no need to add pick
-            const giveTotal = myPlayer.value + myBestPick.value;
+        // — 2v1 (give 2 get 1) —
+        if (typeCounts['2v1'] < typeCaps['2v1']) {
+          const pairs = [];
+          for (let i=0; i<myAllPlayers.length && pairs.length<6; i++) {
+            for (let j=i+1; j<myAllPlayers.length && pairs.length<6; j++) {
+              pairs.push([myAllPlayers[i], myAllPlayers[j]]);
+            }
+          }
+          pairs.forEach(([p1, p2]) => {
+            if (typeCounts['2v1'] >= typeCaps['2v1']) return;
+            const giveTotal = Math.round(p1.value * depthMult(0) + p2.value * depthMult(1));
             const getTotal  = theirPlayer.value;
             const netGain   = getTotal - giveTotal;
             const pctAdv    = netGain / Math.max(getTotal, giveTotal);
-            const isOk = (pctAdv >= -0.10 && pctAdv <= 0.12) ||
-                         (isCriticalNeed && pctAdv >= -0.14);
-            if (!isOk) return;
-            suggestions.push({
-              give: [myPlayer], get: [theirPlayer],
-              givePicks: [myBestPick], getPicks: [],
-              giveTotal, getTotal, netGain, pctAdv,
-              otherTeam, otherIdx: idx,
-              needPos, isNeedFill: isCriticalNeed, tradeType: 'player+pick',
+            if (pctAdv < -0.05 || pctAdv > 0.25) return;
+            const key = `2v1_${[p1.pid,p2.pid].sort().join('_')}_${theirPlayer.pid}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            typeCounts['2v1']++;
+            suggestions.push({ tradeType:'2v1', give:[p1,p2], get:[theirPlayer], givePicks:[], getPicks:[],
+              giveTotal, getTotal, netGain, pctAdv, otherTeam, otherIdx:idx, needPos, isNeedFill:false });
+          });
+        }
+
+        // — 1v2 (give 1 get 2) —
+        if (typeCounts['1v2'] < typeCaps['1v2']) {
+          const pairs = [];
+          for (let i=0; i<theirDepth.length && pairs.length<6; i++) {
+            for (let j=i+1; j<theirDepth.length && pairs.length<6; j++) {
+              pairs.push([theirDepth[i], theirDepth[j]]);
+            }
+          }
+          myAllPlayers.forEach(myPlayer => {
+            if (typeCounts['1v2'] >= typeCaps['1v2']) return;
+            if (myTopPlayer && myPlayer.pid === myTopPlayer.pid) return;
+            pairs.forEach(([g1, g2]) => {
+              if (typeCounts['1v2'] >= typeCaps['1v2']) return;
+              const giveTotal = myPlayer.value;
+              const getTotal  = Math.round(g1.value * depthMult(0) + g2.value * depthMult(1));
+              const netGain   = getTotal - giveTotal;
+              const pctAdv    = netGain / Math.max(getTotal, giveTotal);
+              if (pctAdv < 0 || pctAdv > 0.25) return;
+              const key = `1v2_${myPlayer.pid}_${[g1.pid,g2.pid].sort().join('_')}`;
+              if (seen.has(key)) return;
+              seen.add(key);
+              typeCounts['1v2']++;
+              suggestions.push({ tradeType:'1v2', give:[myPlayer], get:[g1,g2], givePicks:[], getPicks:[],
+                giveTotal, getTotal, netGain, pctAdv, otherTeam, otherIdx:idx, needPos, isNeedFill:false });
             });
           });
         }
 
-        // ── TYPE 3: 2-for-1 consolidation ──────────────────────────
-        // Give 2 depth pieces → get 1 upgrade at weak position
-        const depth = myTradeables.slice(0, 6);
-        for (let i = 0; i < depth.length; i++) {
-          for (let j = i + 1; j < depth.length; j++) {
-            const p1 = depth[i], p2 = depth[j];
-            if (p1.pid === theirPlayer.pid || p2.pid === theirPlayer.pid) continue;
-            const giveTotal = p1.value + p2.value;
-            const getTotal  = theirPlayer.value;
-            if (giveTotal < getTotal * 0.72 || giveTotal > getTotal * 1.40) continue;
-            const netGain = getTotal - giveTotal;
-            const pctAdv  = netGain / Math.max(getTotal, giveTotal);
-            const isOk = (pctAdv >= -0.12 && pctAdv <= 0.25) ||
-                         (isCriticalNeed && pctAdv >= -0.16);
-            if (!isOk) continue;
-            suggestions.push({
-              give: [p1, p2], get: [theirPlayer],
-              givePicks: [], getPicks: [],
-              giveTotal, getTotal, netGain, pctAdv,
-              otherTeam, otherIdx: idx,
-              needPos, isNeedFill: isCriticalNeed, tradeType: '2v1',
+        // — player+pick —
+        if (typeCounts['player+pick'] < typeCaps['player+pick']) {
+          const myPicks = pickInventory.slice(0, 3);
+          myAllPlayers.forEach(myPlayer => {
+            if (typeCounts['player+pick'] >= typeCaps['player+pick']) return;
+            if (myTopPlayer && myPlayer.pid === myTopPlayer.pid) return;
+            myPicks.forEach(pick => {
+              if (typeCounts['player+pick'] >= typeCaps['player+pick']) return;
+              const giveTotal = Math.round(myPlayer.value * depthMult(0) + pick.value * depthMult(1));
+              const getTotal  = theirPlayer.value;
+              const netGain   = getTotal - giveTotal;
+              const pctAdv    = netGain / Math.max(getTotal, giveTotal);
+              if (pctAdv < -0.08 || pctAdv > 0.25) return;
+              const key = `pp_${myPlayer.pid}_${pick.label}_${theirPlayer.pid}`;
+              if (seen.has(key)) return;
+              seen.add(key);
+              typeCounts['player+pick']++;
+              suggestions.push({ tradeType:'player+pick', give:[myPlayer], get:[theirPlayer], givePicks:[pick], getPicks:[],
+                giveTotal, getTotal, netGain, pctAdv, otherTeam, otherIdx:idx, needPos, isNeedFill:false });
             });
-          }
-        }
-      });
-
-      // ── TYPE 4: 1-for-2 sell high ───────────────────────────────
-      // Give 1 strong player → get 2 at my weak position (quantity + need fill)
-      const myStars = strongPos
-        .flatMap(pos => (myTeam.byPos[pos] || []).slice(0, 3))
-        .filter(p => p.value > 1000 && (!myTopPlayer || p.pid !== myTopPlayer.pid));
-
-      const theirAtNeed = (otherTeam.byPos[needPos] || []).filter(p => p.value > 300);
-      myStars.forEach(myPlayer => {
-        for (let i = 0; i < Math.min(theirAtNeed.length, 5); i++) {
-          for (let j = i + 1; j < Math.min(theirAtNeed.length, 6); j++) {
-            const tp1 = theirAtNeed[i], tp2 = theirAtNeed[j];
-            const giveTotal = myPlayer.value;
-            const getTotal  = tp1.value + tp2.value;
-            if (getTotal < giveTotal * 0.72 || getTotal > giveTotal * 1.30) continue;
-            const netGain = getTotal - giveTotal;
-            const pctAdv  = netGain / Math.max(getTotal, giveTotal);
-            const isOk = pctAdv >= -0.08 && pctAdv <= 0.22;
-            if (!isOk) continue;
-            suggestions.push({
-              give: [myPlayer], get: [tp1, tp2],
-              givePicks: [], getPicks: [],
-              giveTotal, getTotal, netGain, pctAdv,
-              otherTeam, otherIdx: idx,
-              needPos, isNeedFill: isCriticalNeed, tradeType: '1v2',
-            });
-          }
+          });
         }
       });
     });
   });
 
-  // Deduplicate by asset fingerprint
-  const seen = new Set();
-  const deduped = suggestions.filter(s => {
-    const gk = [...s.give.map(p=>p.pid), ...s.givePicks.map(p=>p.label)].sort().join('|');
-    const rk = [...s.get.map(p=>p.pid), ...s.getPicks.map(p=>p.label)].sort().join('|');
-    const key = `${gk}__${rk}`;
-    if (seen.has(key)) return false;
-    seen.add(key); return true;
-  });
-
-  // Sort: critical need-fills first, then best net gain
-  deduped.sort((a,b) => {
+  return suggestions.sort((a, b) => {
     if (a.isNeedFill !== b.isNeedFill) return a.isNeedFill ? -1 : 1;
     return b.netGain - a.netGain;
-  });
-
-  // Enforce variety: cap each type so you don't get 8 identical 1v1s
-  const caps = { '1v1': 3, '2v1': 2, '1v2': 2, 'player+pick': 2 };
-  const typeCounts = {};
-  const result = [];
-  for (const s of deduped) {
-    const c = typeCounts[s.tradeType] || 0;
-    const max = caps[s.tradeType] || 2;
-    if (c < max) { typeCounts[s.tradeType] = c + 1; result.push(s); }
-    if (result.length >= 8) break;
-  }
-  // Fill any remaining slots if we came up short
-  for (const s of deduped) {
-    if (result.length >= 8) break;
-    if (!result.includes(s)) result.push(s);
-  }
-  return result;
-}
-
-// ── Suggest section tab switcher ─────────────────────
-function switchSuggestTab(tab) {
-  ['suggested','recent'].forEach(t => {
-    document.getElementById(`stab-${t}`)?.classList.toggle('active', t === tab);
-    document.getElementById(`spanel-${t}`)?.classList.toggle('active', t === tab);
-  });
-  if (tab === 'recent') loadRecentTrades();
-}
-
-// ── Real league trades from Sleeper API ──────────────
-let _recentTradesLoaded = false;
-
-async function loadRecentTrades() {
-  const container = document.getElementById('trade-feed');
-  if (!container) return;
-  if (!S.league) {
-    container.innerHTML = '<div class="suggest-empty">Load a league first.</div>';
-    return;
-  }
-  if (_recentTradesLoaded) { filterTradeFeed(); return; } // re-render from cache
-
-  container.innerHTML = '<div class="suggest-empty">Loading trades…</div>';
-
-  try {
-    const lid = S.league.league_id;
-    const currentWeek = S.nflState?.week || 18;
-    // Fetch round 0 (offseason) + all 18 possible in-season rounds in parallel
-    const rounds = Array.from({ length: 20 }, (_, i) => i); // 0–19
-    const results = await Promise.all(
-      rounds.map(r => apiFetch(`${API}/league/${lid}/transactions/${r}`).catch(() => []))
-    );
-
-    // Flatten, keep only completed trades, sort newest first — store ALL (no cap)
-    S._allTrades = results
-      .flat()
-      .filter(t => t.type === 'trade' && t.status === 'complete')
-      .sort((a, b) => (b.status_updated_at || 0) - (a.status_updated_at || 0));
-
-    _recentTradesLoaded = true;
-    filterTradeFeed(); // initial render
-  } catch(e) {
-    container.innerHTML = `<div class="suggest-empty">Couldn't load trades: ${e.message}</div>`;
-  }
-}
-
-function filterTradeFeed() {
-  const container = document.getElementById('trade-feed');
-  const countEl   = document.getElementById('trade-feed-count');
-  if (!container) return;
-
-  const raw   = document.getElementById('trade-feed-search')?.value || '';
-  const query = normName(raw);
-  const allPlayers = S._allPlayers || {};
-
-  let trades;
-  if (!query) {
-    trades = S._allTrades.slice(0, 25); // no search: 25 most recent
-    if (countEl) countEl.style.display = 'none';
-  } else {
-    trades = S._allTrades.filter(tx => {
-      const pids = [...Object.keys(tx.adds || {}), ...Object.keys(tx.drops || {})];
-      return pids.some(pid => {
-        const p = allPlayers[pid];
-        if (!p) return false;
-        const name = normName(`${p.first_name||''} ${p.last_name||''}`.trim());
-        return name.includes(query);
-      });
-    });
-    if (countEl) {
-      countEl.textContent = trades.length
-        ? `${trades.length} trade${trades.length !== 1 ? 's' : ''} involving "${raw}"`
-        : '';
-      countEl.style.display = trades.length ? 'block' : 'none';
-    }
-  }
-
-  renderRecentTrades(trades, container, raw);
-}
-
-function renderRecentTrades(trades, container, query = '') {
-  if (!trades.length) {
-    const msg = query
-      ? `<strong>No trades found</strong>No trades in this league involved "${esc(query)}".`
-      : 'No completed trades found in this league yet.';
-    container.innerHTML = `<div class="suggest-empty">${msg}</div>`;
-    return;
-  }
-
-  const allPlayers = S._allPlayers || {};
-  const rosterMap  = S.rosterMap  || {};
-
-  function getPlayerName(pid) {
-    const p = allPlayers[String(pid)];
-    if (!p) return `Player #${pid}`;
-    return `${p.first_name || ''} ${p.last_name || ''}`.trim();
-  }
-  function getPlayerPos(pid) {
-    return allPlayers[String(pid)]?.position || '';
-  }
-  function getRosterName(rid) {
-    const r = rosterMap[rid];
-    if (!r) return `Team ${rid}`;
-    return teamName(r);
-  }
-  function fmtDate(ms) {
-    if (!ms) return '';
-    const d = new Date(ms);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  }
-
-  const POS_COLORS = {
-    QB:'#FF9EB5', RB:'#7CC8FF', WR:'#8DFFA0', TE:'#D88DFF',
-    K:'#FFC97A', DEF:'#A0C4FF',
-  };
-
-  container.innerHTML = trades.map(tx => {
-    const rids = tx.roster_ids || [];
-    const adds  = tx.adds  || {};
-    const drops = tx.drops || {};
-    const picks = tx.draft_picks || [];
-
-    // Build per-roster: { received: [{pid, pos, name}], gave: [{pid, pos, name}], picksIn: [], picksOut: [] }
-    const sides = {};
-    rids.forEach(rid => { sides[rid] = { received: [], gave: [], picksIn: [], picksOut: [] }; });
-
-    // Player movements
-    Object.entries(adds).forEach(([pid, toRid]) => {
-      if (sides[toRid]) {
-        const fromRid = drops[pid]; // who gave it up
-        sides[toRid].received.push({ pid, pos: getPlayerPos(pid), name: getPlayerName(pid) });
-      }
-    });
-    Object.entries(drops).forEach(([pid, fromRid]) => {
-      if (sides[fromRid]) {
-        sides[fromRid].gave.push({ pid, pos: getPlayerPos(pid), name: getPlayerName(pid) });
-      }
-    });
-
-    // Pick movements: roster_id = new owner, previous_owner_id = who gave it up in THIS trade
-    picks.forEach(pk => {
-      const newOwner  = pk.roster_id;
-      const prevOwner = pk.previous_owner_id;
-      const originalSlot = pk.owner_id;
-      const roundLabel = pk.round === 1 ? '1st' : pk.round === 2 ? '2nd' : pk.round === 3 ? '3rd' : `${pk.round}th`;
-      const slotTeam = originalSlot !== newOwner && originalSlot !== prevOwner
-        ? ` (${getRosterName(originalSlot)})` : '';
-      const label = `${pk.season} ${roundLabel}${slotTeam}`;
-      if (sides[newOwner])  sides[newOwner].picksIn.push(label);
-      if (sides[prevOwner]) sides[prevOwner].picksOut.push(label);
-    });
-
-    function assetHTML(players, picks, isPick) {
-      const searchQuery = normName(query);
-    let html = '';
-      players.forEach(p => {
-        const isMatch = searchQuery && normName(p.name).includes(searchQuery);
-        const nameHtml = isMatch
-          ? `<span style="color:var(--brand);font-weight:700">${esc(p.name)}</span>`
-          : esc(p.name);
-        html += `<div class="trade-feed-asset">
-          <span class="pl-pos-tag pos-${p.pos}" style="font-size:9px;padding:1px 4px;border-radius:3px">${p.pos||'?'}</span>
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nameHtml}</span>
-        </div>`;
-      });
-      picks.forEach(lbl => {
-        html += `<div class="trade-feed-asset">
-          <span class="pl-pos-tag" style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(255,215,0,.18);color:#FFD700;border-color:rgba(255,215,0,.3)">PICK</span>
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tt)">${esc(lbl)}</span>
-        </div>`;
-      });
-      return html || `<div class="trade-feed-asset" style="color:var(--td)">—</div>`;
-    }
-
-    const sidesHTML = rids.map((rid, i) => {
-      const s = sides[rid] || { received: [], gave: [], picksIn: [], picksOut: [] };
-      return `
-        ${i > 0 ? '<div class="trade-feed-divider"></div>' : ''}
-        <div class="trade-feed-side">
-          <div class="trade-feed-side-lbl" style="color:var(--brand)">${esc(getRosterName(rid))} receives</div>
-          ${assetHTML(s.received, s.picksIn)}
-        </div>`;
-    }).join('');
-
-    return `
-    <div class="trade-feed-card">
-      <div class="trade-feed-hdr">
-        <span class="trade-feed-teams">${rids.map(getRosterName).map(esc).join(' ↔ ')}</span>
-        <span class="trade-feed-date">${fmtDate(tx.status_updated_at)}</span>
-      </div>
-      <div class="trade-feed-sides">${sidesHTML}</div>
-    </div>`;
-  }).join('');
+  }).slice(0, 9);
 }
 
 function findSuggestedTrades() {
@@ -2320,10 +2374,9 @@ function findSuggestedTrades() {
   if (!container) return;
 
   if (!S.dynastyLoaded || !S.teamDynasty.length) {
-    container.innerHTML = '<div class="suggest-empty">Dynasty values still loading — suggestions will appear once rankings finish.</div>';
+    container.innerHTML = '<div class="suggest-empty">Dynasty values still loading — suggestions appear once rankings finish.</div>';
     return;
   }
-
   const myIdx = S.myRosterIdx;
   if (myIdx == null || myIdx < 0) {
     container.innerHTML = '<div class="suggest-empty">Sign in with your Sleeper username to see personalized trade suggestions.</div>';
@@ -2331,113 +2384,80 @@ function findSuggestedTrades() {
   }
 
   const suggestions = generateTradeSuggestions(myIdx);
-
   if (!suggestions.length) {
-    container.innerHTML = '<div class="suggest-empty"><strong>No trades found</strong>Your roster is well-balanced or values aren\'t loaded yet. Try after dynasty rankings finish loading.</div>';
+    container.innerHTML = '<div class="suggest-empty"><strong>No trades found.</strong> Your roster looks well-balanced, or try loading dynasty values first.</div>';
     return;
   }
 
-  const total = S.teamDynasty.length;
-
-  // Position colors
   const POS_COLORS = {
-    QB: { bg:'rgba(255,100,130,.15)', color:'#FF9EB5' },
-    RB: { bg:'rgba(0,140,255,.15)',   color:'#7CC8FF' },
-    WR: { bg:'rgba(124,255,113,.12)', color:'#8DFFA0' },
-    TE: { bg:'rgba(201,108,255,.12)', color:'#D88DFF' },
+    QB:{ bg:'rgba(255,100,130,.15)', color:'#FF9EB5' },
+    RB:{ bg:'rgba(0,140,255,.15)',   color:'#7CC8FF' },
+    WR:{ bg:'rgba(124,255,113,.12)', color:'#8DFFA0' },
+    TE:{ bg:'rgba(201,108,255,.12)', color:'#D88DFF' },
   };
-
-  const TYPE_LABELS = {
-    '1v1': '', '2v1': 'Package Deal', '1v2': 'Sell High', 'player+pick': 'Add Pick',
-  };
-
-  function renderAssets(players, picks) {
-    let html = '';
-    players.forEach((p, i) => {
-      const pc2 = POS_COLORS[p.pos] || { bg:'rgba(52,70,119,.5)', color:'var(--ts)' };
-      html += `<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
-        ${i > 0 ? `<span style="color:var(--td);font-size:11px;width:12px;flex-shrink:0">+</span>` : `<span style="width:12px;flex-shrink:0"></span>`}
-        <span class="pl-pos-tag pos-${p.pos}" style="font-size:10px;padding:2px 5px;border-radius:4px">${p.pos}</span>
-        <span class="suggest-player-name">${esc(p.name)}</span>
-      </div>`;
-    });
-    picks.forEach(pk => {
-      html += `<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
-        <span style="color:var(--td);font-size:11px;width:12px;flex-shrink:0">+</span>
-        <span class="pl-pos-tag" style="font-size:10px;padding:2px 5px;border-radius:4px;background:rgba(255,215,0,.18);color:#FFD700;border-color:rgba(255,215,0,.3)">PICK</span>
-        <span class="suggest-player-name">${esc(pk.label)}</span>
-      </div>`;
-    });
-    return html;
-  }
+  const TYPE_LABELS = { '1v1':'1 for 1', '2v1':'2 for 1', '1v2':'1 for 2', 'player+pick':'Player + Pick' };
 
   container.innerHTML = suggestions.map((s, i) => {
-    const pc       = POS_COLORS[s.needPos] || { bg:'rgba(52,70,119,.5)', color:'var(--ts)' };
-    const gain     = Math.round(s.netGain);
-    const pct      = Math.round(Math.abs(s.pctAdv) * 100);
+    const pc    = POS_COLORS[s.needPos] || { bg:'rgba(52,70,119,.5)', color:'var(--ts)' };
+    const gain  = Math.round(s.netGain);
+    const pct   = Math.round(Math.abs(s.pctAdv) * 100);
     const gainLabel = gain > 0
       ? `<span class="suggest-gain" style="color:var(--success)">+${gain.toLocaleString()} (${pct}% edge)</span>`
       : `<span class="suggest-gain" style="color:var(--brand)">Even — fills need</span>`;
-    const typeLabel = TYPE_LABELS[s.tradeType];
-    const typeBadge = typeLabel
-      ? `<span style="background:rgba(52,70,119,.7);color:var(--ts);font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px">${typeLabel}</span>`
-      : '';
+
+    const typeLabel = TYPE_LABELS[s.tradeType] || s.tradeType;
+
+    function renderAssets(players, picks, label) {
+      const items = [
+        ...players.map(p => `<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+          <span class="pl-pos-tag pos-${p.pos}" style="font-size:10px;padding:2px 5px;border-radius:4px;flex-shrink:0">${p.pos}</span>
+          <span class="suggest-player-name">${esc(p.name)}</span>
+          <span class="suggest-player-meta" style="margin-left:auto">${p.value.toLocaleString()}</span>
+        </div>`),
+        ...picks.map(pk => `<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+          <span class="pl-pos-tag" style="font-size:10px;padding:2px 5px;border-radius:4px;flex-shrink:0;background:rgba(255,215,0,.15);color:#FFD700">PK</span>
+          <span class="suggest-player-name">${esc(pk.label)}</span>
+          <span class="suggest-player-meta" style="margin-left:auto">${pk.value.toLocaleString()}</span>
+        </div>`),
+      ];
+      return `<div class="suggest-player-block">
+        <div class="suggest-player-meta" style="margin-bottom:5px">${label} · ${s.tradeType==='2v1'&&label==='You give'?s.giveTotal.toLocaleString():s.tradeType==='1v2'&&label==='You get'?s.getTotal.toLocaleString():(label==='You give'?s.giveTotal:s.getTotal).toLocaleString()}</div>
+        ${items.join('')}
+      </div>`;
+    }
 
     return `
     <div class="suggest-card">
       <div class="suggest-card-top">
         <span class="suggest-need-badge" style="background:${pc.bg};color:${pc.color}">NEED ${s.needPos}</span>
+        <span style="font-size:10px;color:var(--td);background:rgba(52,70,119,.4);border-radius:4px;padding:2px 6px">${typeLabel}</span>
         <span class="suggest-other-team">vs ${esc(teamName(s.otherTeam.roster))}</span>
-        ${typeBadge}
         ${gainLabel}
       </div>
       <div class="suggest-vs-row">
-        <div class="suggest-player-block">
-          ${renderAssets(s.give, s.givePicks)}
-          <div class="suggest-player-meta" style="margin-top:4px">You give · ${s.giveTotal.toLocaleString()}</div>
-        </div>
+        ${renderAssets(s.give, s.givePicks, 'You give')}
         <div class="suggest-arrow">→</div>
-        <div class="suggest-player-block">
-          ${renderAssets(s.get, s.getPicks)}
-          <div class="suggest-player-meta" style="margin-top:4px">You get · ${s.getTotal.toLocaleString()}</div>
-        </div>
+        ${renderAssets(s.get, s.getPicks, 'You get')}
         <button class="suggest-load-btn" onclick="loadSuggestionIntoCalc(${i})">Load →</button>
       </div>
     </div>`;
   }).join('');
 
-  // Cache suggestions so Load button can reference them
   window._lastSuggestions = suggestions;
 }
 
 function loadSuggestionIntoCalc(idx) {
   const s = window._lastSuggestions?.[idx];
   if (!s) return;
-
-  T.a = [];
-  T.b = [];
-
-  // Side A = what YOU give up
-  s.give.forEach((p, i) => {
-    T.a.push({ id: `${p.pid}_give_${Date.now()+i}`, pid: p.pid, name: p.name, pos: p.pos, value: p.value, type: 'player' });
-  });
-  s.givePicks.forEach((pk, i) => {
-    T.a.push({ id: `pick_give_${i}_${Date.now()}`, name: pk.label, value: pk.value, type: 'pick' });
-  });
-
-  // Side B = what YOU get back
-  s.get.forEach((p, i) => {
-    T.b.push({ id: `${p.pid}_get_${Date.now()+100+i}`, pid: p.pid, name: p.name, pos: p.pos || s.needPos, value: p.value, type: 'player' });
-  });
-  s.getPicks.forEach((pk, i) => {
-    T.b.push({ id: `pick_get_${i}_${Date.now()}`, name: pk.label, value: pk.value, type: 'pick' });
-  });
-
+  T.a = []; T.b = [];
+  s.give.forEach((p, i) => T.a.push({ id:`${p.pid}_${Date.now()+i}`, pid:p.pid, name:p.name, pos:p.pos, value:p.value, type:'player' }));
+  s.givePicks.forEach((pk, i) => T.a.push({ id:`pick_${Date.now()+100+i}`, name:pk.label, pos:'PICK', value:pk.value, type:'pick' }));
+  s.get.forEach((p, i) => T.b.push({ id:`${p.pid}_${Date.now()+200+i}`, pid:p.pid, name:p.name, pos:p.pos || s.needPos, value:p.value, type:'player' }));
+  s.getPicks.forEach((pk, i) => T.b.push({ id:`pick2_${Date.now()+300+i}`, name:pk.label, pos:'PICK', value:pk.value, type:'pick' }));
   renderTradeItems('a');
   renderTradeItems('b');
   updateVerdict();
-
-  document.getElementById('trade-verdict')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.getElementById('trade-verdict')?.scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
 // ── Enter key ─────────────────────────────────────────
